@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>看图猜区县</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- 游戏面板 -->
+<div id="panel">
+    <h3>
+        🗺️ 看图猜区县
+        <button id="togglePanelBtn" type="button" onclick="togglePanel()">收起</button>
+    </h3>
+
+    <div id="panelContent">
+        <div id="modeSelect">
+            <button id="btnEasy">简单</button>
+            <button id="btnNormal">中等</button>
+            <button id="btnHard">困难</button>
+            <button id="btnClassic">经典</button>
+            <button id="btnDaily">📅 每日挑战</button>
+            <button id="btnTimer">⏱ 计时</button>
+        </div>
+        <div id="timerDisplay"></div>
+        <div>
+<div class="filter-container">
+    <div class="filter-group">
+        <label for="regionSelect">🗺️ 大区筛选：</label>
+        <select id="regionSelect">
+            <option value="all">🌏 全国</option>
+            <option value="north">🏔️ 华北</option>
+            <option value="northeast">❄️ 东北</option>
+            <option value="east">🌊 华东</option>
+            <option value="central">🏮 华中</option>
+            <option value="south">🌴 华南</option>
+            <option value="southwest">⛰️ 西南</option>
+            <option value="northwest">🏜️ 西北</option>
+        </select>
+        <div id="regionHint" class="filter-hint">💡 选择大区后只出现该区域的题目</div>
+    </div>
+    
+    <div class="filter-group">
+        <label for="provinceSelect">🏙️ 省份筛选：</label>
+        <select id="provinceSelect">
+            <option value="all">全部省份</option>
+        </select>
+        <div id="provinceHint" class="filter-hint">💡 选择省份后只出现该省的题目</div>
+    </div>
+</div>
+<div class="speed-container">
+    <label for="speedSelect">🎮 游戏速度：</label>
+    <select id="speedSelect" onchange="setGameSpeed()">
+        <option value="fast">⚡ 快速（0.6秒）</option>
+        <option value="normal" selected>🚶 正常（1.5秒）</option>
+        <option value="slow">🐢 慢速（2.5秒）</option>
+    </select>
+    <div id="speedHint" class="speed-hint">
+        💡 答对后切换下一题的速度
+    </div>
+</div>
+        </div>
+        <input type="text" id="input" placeholder="输入区县名..." autocomplete="off">
+        <button id="submitBtn">猜！</button>
+        <button id="newBtn">🔄 换一个</button>
+        <div id="msg"></div>
+        <div id="score">得分: 0</div>
+        <div id="bestScore">🏆 最高分: 0</div>
+        <div id="hint">💡 提示</div>
+        <div id="inputHelp" style="font-size:12px;color:#999;margin-top:6px;cursor:pointer;">📖 输入规则</div>
+    </div>
+</div>
+
+<div id="dailyPanel" style="display:none;">
+    <h3>📅 每日挑战</h3>
+    <div id="dailyScore">得分: 0</div>
+    <div id="dailyBestDisplay">📅 今日挑战最佳 0</div>
+    <div id="dailyProgress">第 1 / 10 题</div>
+    <div id="dailyMsg"></div>
+    <input type="text" id="dailyInput" placeholder="输入区县名..." autocomplete="off">
+    <button id="dailySubmitBtn">猜！</button>
+    <button id="dailyShareBtn">📤 分享成绩</button>
+    <button id="dailyImageBtn">🖼️ 生成图片</button>
+    <button id="dailyExitBtn">退出每日挑战</button>
+</div>
+
+<div id="helpPopup" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:9999;max-width:320px;">
+    <b>📖 输入规则</b>
+    <ul style="padding-left:18px;margin-top:8px;">
+        <li>兼容简称，如“新疆”</li>
+        <li>也可输入完整名称，如“新疆维吾尔自治区”</li>
+        <li>重名区县请输入上级名称，如“上海市宝山区”或“宝山区（上海市）”</li>
+        <li>只输入“宝山”或“宝山区”会判定为错误</li>
+        <li>民族自治区域也兼容简称</li>
+        <li>“峨山”，“峨山县”或“峨山彝族自治县”都可以匹配</li>
+    </ul>
+    <button onclick="document.getElementById('helpPopup').style.display='none'" style="margin-top:10px;">知道了</button>
+</div>
+
+<div id="map"></div>
+
+    <!-- 1. 先加载配置文件 -->
+    <script src="js/config.js"></script>
+
+    <!-- 2. 从配置文件读取高德 Key，再动态加载高德地图 API -->
+<script>
+    var amapKeys = window.AMAP_CONFIG.keys;
+
+    var amapKeyIndex = parseInt(localStorage.getItem('amapKeyIndex') || '0');
+    amapKeyIndex = amapKeyIndex % amapKeys.length;
+    var currentKeyPair = amapKeys[amapKeyIndex];
+    
+    localStorage.setItem('amapKeyIndex', (amapKeyIndex + 1) % amapKeys.length);
+
+    window._AMapSecurityConfig = { securityJsCode: currentKeyPair.security };
+
+    document.write('<script src="https://webapi.amap.com/maps?v=2.0&key=' + currentKeyPair.key + '&plugin=AMap.DistrictSearch"><\/script>');
+</script>
+
+    <!-- 3. 加载数据和游戏逻辑 -->
+    <script src="js/data.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/ui.js"></script>
+
+    <!-- 4. 页面加载完成后初始化 -->
+<script>
+    // 设置 CSS 变量，解决移动端 100vh 问题
+    function setViewportHeight() {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+    
+    // 监听窗口大小变化
+    window.addEventListener('resize', setViewportHeight);
+    window.addEventListener('orientationchange', () => {
+        setTimeout(setViewportHeight, 300);
+    });
+    
+    // 初始化时设置
+    setViewportHeight();
+    
+    window.onload = function () {
+        // 先绑定 UI
+        bindUI();
+        initSpeedSetting();
+        updateBestScoreDisplay();
+        
+        // 先初始化地图
+        initMap();
+        
+        // 延迟设置模式（等地图加载完成后再设置）
+        setTimeout(() => {
+            setMode('normal');
+        }, 500);
+        
+        // 延迟显示筛选提示
+        setTimeout(() => {
+            showFilterHint('regionHint', '💡 选择大区后只出现该区域的题目', 'info');
+            setTimeout(() => {
+                showFilterHint('provinceHint', '💡 选择省份后只出现该省的题目', 'info');
+            }, 1000);
+        }, 2000);
+    };
+</script>
+</body>
+</html>
+</body>
+</html>
