@@ -218,6 +218,21 @@ const aliasMap = buildAliasMap();
 (function forceFixAliases() {
     aliasMap['六枝特区'] = ['六枝特区', '六枝'];
 aliasMap['大柴旦行政委员会'] = ['大柴旦行政委员会', '大柴旦'];
+    
+    // 👇 在这里添加
+    const newAreaMap = {
+        '浦东新区': '浦东',
+        '沈北新区': '沈北',
+        '滨海新区': '滨海',
+        '两江新区': '两江'
+    };
+    for (const [full, short] of Object.entries(newAreaMap)) {
+        if (aliasMap[full]) {
+            aliasMap[full] = [full, short];
+        }
+    }
+    // 👆 添加到这里
+    
         // 地区
     [
         '大兴安岭地区',
@@ -1380,20 +1395,21 @@ function showHint() {
         '81':'香港','82':'澳门'
     };
 
-const regionMap = {
-    '11':'华北','12':'华北','13':'华北','14':'华北','15':'华北',
-    '21':'东北','22':'东北','23':'东北',
-    '31':'华东','32':'华东','33':'华东','34':'华东','35':'华东','36':'华东','37':'华东',
-    '41':'华中','42':'华中','43':'华中',
-    '44':'华南','45':'华南','46':'华南',
-    '50':'西南','51':'西南','52':'西南','53':'西南','54':'西南',
-    '61':'西北','62':'西北','63':'西北','64':'65',
-    '81':'港澳','82':'港澳'
-};
+    const regionMap = {
+        '11':'华北','12':'华北','13':'华北','14':'华北','15':'华北',
+        '21':'东北','22':'东北','23':'东北',
+        '31':'华东','32':'华东','33':'华东','34':'华东','35':'华东','36':'华东','37':'华东',
+        '41':'华中','42':'华中','43':'华中',
+        '44':'华南','45':'华南','46':'华南',
+        '50':'西南','51':'西南','52':'西南','53':'西南','54':'西南',
+        '61':'西北','62':'西北','63':'西北','64':'西北','65':'西北',
+        '81':'港澳','82':'港澳'
+    };
 
     const regionName = regionMap[provinceCode] || '';
     const provinceName = provinceMap[provinceCode] || '';
 
+    // ==================== 经典模式 ====================
     if (gameMode === 'classic') {
         if (hintLevel >= 3) return;
 
@@ -1401,7 +1417,6 @@ const regionMap = {
         hintUsed = true;
 
         if (window.innerWidth <= 768) {
-            // 手机端：每次提示都重画
             if (targetDistrict) {
                 drawDistrictAndNeighbors(targetDistrict, mobileNeighborData || []);
             }
@@ -1409,7 +1424,6 @@ const regionMap = {
             return;
         }
 
-        // 电脑端：原始逻辑
         if (hintLevel === 1) {
             hintDeduct = 0.5;
             map.setStatus({ zoomEnable: true });
@@ -1432,7 +1446,15 @@ const regionMap = {
         return;
     }
 
+    // ==================== 简单模式 ====================
     if (gameMode === 'easy') {
+        // 有筛选时无提示
+        if (selectedRegion !== 'all' || selectedProvince !== 'all') {
+            setMsg('💡 简单模式筛选后不支持提示', '');
+            return;
+        }
+        
+        // 无筛选时保持原样
         if (hintLevel >= 1) return;
         hintLevel++;
         hintUsed = true;
@@ -1441,7 +1463,25 @@ const regionMap = {
         return;
     }
 
+    // ==================== 中等模式 ====================
     if (gameMode === 'normal') {
+        // 大区筛选：给省份提示
+        if (selectedRegion !== 'all' && selectedProvince === 'all') {
+            if (hintLevel >= 1) return;
+            hintLevel++;
+            hintUsed = true;
+            hintDeduct = 0.6;
+            setMsg(`💡 ${provinceName}（-0.6分）`, '');
+            return;
+        }
+        
+        // 省份筛选：无提示
+        if (selectedProvince !== 'all') {
+            setMsg('💡 中等模式+省份筛选不支持提示', '');
+            return;
+        }
+        
+        // 无筛选：原样
         if (hintLevel >= 2) return;
         hintLevel++;
         hintUsed = true;
@@ -1455,7 +1495,35 @@ const regionMap = {
         return;
     }
 
+    // ==================== 困难模式 ====================
     if (gameMode === 'hard') {
+        // 大区筛选：省→地级
+        if (selectedRegion !== 'all' && selectedProvince === 'all') {
+            if (hintLevel >= 2) return;
+            hintLevel++;
+            hintUsed = true;
+            
+            if (hintLevel === 1) {
+                hintDeduct = 0.3;
+                setMsg(`💡 ${provinceName}（-0.3分）`, '');
+            } else {
+                hintDeduct = 0.6;
+                setMsg(`💡 ${provinceName} · ${cityName}（-0.6分）`, '');
+            }
+            return;
+        }
+        
+        // 省份筛选：地级
+        if (selectedProvince !== 'all') {
+            if (hintLevel >= 1) return;
+            hintLevel++;
+            hintUsed = true;
+            hintDeduct = 0.6;
+            setMsg(`💡 ${cityName}（-0.6分）`, '');
+            return;
+        }
+        
+        // 无筛选：原样3档
         if (hintLevel >= 3) return;
         hintLevel++;
         hintUsed = true;
@@ -1468,6 +1536,7 @@ const regionMap = {
         } else {
             setMsg(`💡 ${regionName} · ${provinceName} · ${cityName}（累计-0.6分）`, '');
         }
+        return;
     }
 }
 
@@ -1481,8 +1550,12 @@ function setGameSpeed() {
     
     // 显示当前速度说明
     const speedInfo = {
+        'instant': {
+            text: '⚡ 即时模式：答对后立即切换，不等待',
+            className: 'speed-instant'
+        },
         'fast': {
-            text: '⚡ 快速模式：答对后立即切换，适合高手挑战',
+            text: '⚡ 快速模式：答对后短暂停留，适合高手挑战',
             className: 'speed-fast'
         },
         'normal': {
@@ -1514,6 +1587,7 @@ function setGameSpeed() {
 }
 
 function getDelay() {
+    if (gameSpeed === 'instant') return 0;
     if (gameSpeed === 'fast') return 600;
     if (gameSpeed === 'slow') return 2500;
     return 1500;

@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" type="image/png" href="favicon.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>看图猜区县</title>
     <link rel="stylesheet" href="css/style.css">
@@ -52,23 +53,25 @@
 </div>
 <div class="speed-container">
     <label for="speedSelect">🎮 游戏速度：</label>
-    <select id="speedSelect" onchange="setGameSpeed()">
-        <option value="fast">⚡ 快速（0.6秒）</option>
-        <option value="normal" selected>🚶 正常（1.5秒）</option>
-        <option value="slow">🐢 慢速（2.5秒）</option>
-    </select>
+<select id="speedSelect" onchange="setGameSpeed()">
+    <option value="instant">⚡ 即时（0秒）</option>
+    <option value="fast">🏃 快速（0.6秒）</option>
+    <option value="normal" selected>🚶 正常（1.5秒）</option>
+    <option value="slow">🐢 慢速（2.5秒）</option>
+</select>
     <div id="speedHint" class="speed-hint">
         💡 答对后切换下一题的速度
     </div>
 </div>
         </div>
-        <input type="text" id="input" placeholder="输入区县名..." autocomplete="off">
+        <input type="text" id="input" placeholder="输入答案..." autocomplete="off">
         <button id="submitBtn">猜！</button>
         <button id="newBtn">🔄 换一个</button>
         <div id="msg"></div>
         <div id="score">得分: 0</div>
         <div id="bestScore">🏆 最高分: 0</div>
-        <div id="hint">💡 提示</div>
+<div id="hint">💡 提示</div>
+<div id="showAnswer" style="margin-top:5px;text-align:center;color:#999;font-size:12px;cursor:pointer;">❓ 显示答案</div>
         <div id="inputHelp" style="font-size:12px;color:#999;margin-top:6px;cursor:pointer;">📖 输入规则</div>
     </div>
 </div>
@@ -95,6 +98,7 @@
         <li>只输入“宝山”或“宝山区”会判定为错误</li>
         <li>民族自治区域也兼容简称</li>
         <li>“峨山”，“峨山县”或“峨山彝族自治县”都可以匹配</li>
+        <li>“浦东新区”“滨海新区”“沈北新区”“两江新区”可以省略“新区”二字</li>
     </ul>
     <button onclick="document.getElementById('helpPopup').style.display='none'" style="margin-top:10px;">知道了</button>
 </div>

@@ -5,6 +5,7 @@ function setMsg(text, className) {
 }
 
 function bindUI() {
+    document.getElementById('showAnswer').addEventListener('click', showAnswer);
     document.getElementById('submitBtn').addEventListener('click', checkAnswer);
     document.getElementById('newBtn').addEventListener('click', newRound);
     document.getElementById('hint').addEventListener('click', showHint);
@@ -143,7 +144,7 @@ function showFilterHint(elementId, text, type = 'info') {
 
 function initSpeedSetting() {
     const savedSpeed = localStorage.getItem('gameSpeed');
-    if (savedSpeed && ['fast', 'normal', 'slow'].includes(savedSpeed)) {
+    if (savedSpeed && ['instant', 'fast', 'normal', 'slow'].includes(savedSpeed)) {
         gameSpeed = savedSpeed;
         const speedSelect = document.getElementById('speedSelect');
         if (speedSelect) {
@@ -199,6 +200,18 @@ if (mode === 'classic') {
     document.getElementById('btnHard').classList.toggle('active', mode === 'hard');
     document.getElementById('btnClassic').classList.toggle('active', mode === 'classic');
 
+    // 更新输入框提示
+    const input = document.getElementById('input');
+    if (input) {
+        if (mode === 'easy') {
+            input.placeholder = '输入省份名...';
+        } else if (mode === 'normal') {
+            input.placeholder = '输入地级市名...';
+        } else {
+            input.placeholder = '输入区县名...';
+        }
+    }
+
     newRound();
 }
 
@@ -236,4 +249,23 @@ function getBestScore() {
 function updateBestScoreDisplay() {
     const best = getBestScore();
     document.getElementById('bestScore').textContent = '🏆 最高分: ' + best.toFixed(1);
+}
+
+function showAnswer() {
+    if (!targetDistrict) return;
+    
+    if (dailyMode) {
+        document.getElementById('dailyMsg').textContent = `💡 答案是：${targetDistrict.name}`;
+        return;
+    }
+    
+    setMsg(`💡 答案是：${targetDistrict.name}（本题不得分）`, 'wrong');
+    
+    // 本题不得分，自动换下一题
+    document.getElementById('input').disabled = true;
+    document.getElementById('submitBtn').disabled = true;
+    
+    setTimeout(() => {
+        newRound();
+    }, getDelay() + 3000);
 }
