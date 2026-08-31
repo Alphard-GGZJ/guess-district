@@ -1594,6 +1594,9 @@ function getDelay() {
 }
 
 function checkAnswer() {
+    // 小游戏模式下不响应
+    if (findDifferentMode) return;
+
     if (!targetDistrict) return;
 
 if (dailyMode) {

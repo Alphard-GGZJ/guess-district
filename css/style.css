@@ -477,3 +477,35 @@ body {
     background: linear-gradient(135deg, #dfe9f5 0%, #f9fafc 100%);
 }
 
+#miniGamesPanel {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    z-index: 9999 !important;
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.3);
+    font-size: 14px;
+    min-width: 280px;
+}
+
+#miniGamesPanel h3 {
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+#miniGamesPanel button {
+    transition: all 0.2s ease;
+}
+
+#miniGamesPanel button:hover {
+    transform: scale(1.03);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+#miniGamesPanel button:active {
+    transform: scale(0.95);
+}
+
