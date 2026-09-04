@@ -5,6 +5,7 @@ function setMsg(text, className) {
 }
 
 function bindUI() {
+        document.getElementById('dailySkipBtn').addEventListener('click', skipDailyQuestion);
     document.getElementById('showAnswer').addEventListener('click', showAnswer);
     document.getElementById('submitBtn').addEventListener('click', checkAnswer);
     document.getElementById('newBtn').addEventListener('click', newRound);
@@ -746,4 +747,27 @@ function getCityCodeMap() {
         '银川市':'6401','石嘴山市':'6402','吴忠市':'6403','固原市':'6404','中卫市':'6405',
         '乌鲁木齐市':'6501','克拉玛依市':'6502','吐鲁番市':'6504','哈密市':'6505','昌吉回族自治州':'6523','博尔塔拉蒙古自治州':'6527','巴音郭楞蒙古自治州':'6528','阿克苏地区':'6529','克孜勒苏柯尔克孜自治州':'6530','喀什地区':'6531','和田地区':'6532','伊犁哈萨克自治州':'6540','塔城地区':'6542','阿勒泰地区':'6543'
     };
+}
+
+let skipDailyLock = false;
+
+function skipDailyQuestion() {
+    if (!dailyMode || dailyCompleted) return;
+    
+    // 防连点
+    if (skipDailyLock) return;
+    skipDailyLock = true;
+    
+    playSound('click');
+    
+    document.getElementById('dailySkipBtn').disabled = true;
+    document.getElementById('dailyMsg').textContent = '⏭ 已跳过，本题不得分';
+    
+    dailyIndex++;
+    
+    setTimeout(() => {
+        skipDailyLock = false;
+        document.getElementById('dailySkipBtn').disabled = false;
+        loadDailyQuestion();
+    }, 500);
 }
