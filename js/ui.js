@@ -807,7 +807,6 @@ function openBattlePanel() {
     
     dailyMode = false;
     findDifferentMode = false;
-    coastInlandMode = false;
     
     if (timerMode) {
         timerMode = false;
@@ -823,7 +822,13 @@ function openBattlePanel() {
     document.getElementById('dailyPanel').style.display = 'none';
     document.getElementById('miniGamesPanel').style.display = 'none';
     
-    document.getElementById('battlePanel').style.display = 'block';
+    const bp = document.getElementById('battlePanel');
+    bp.style.display = 'block';
+    bp.style.opacity = '0';
+    bp.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => {
+        bp.style.opacity = '1';
+    }, 10);
 }
 
 function closeBattlePanel() {
@@ -966,11 +971,16 @@ function handleBattleUpdate(roomData) {
         document.getElementById('battleRoomInfo').textContent = `房间号: ${battleRoomId} | 对战进行中！`;
         document.getElementById('battleInput').disabled = false;
         
-        // 竞速模式：双方加载同一道题
-        if (roomData.mode === 'race' && roomData.current_question && !battleQuestionLoaded) {
-            battleQuestionLoaded = true;
-            document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
-            loadBattleDistrict(roomData.current_question);
+        // 竞速模式
+        if (roomData.mode === 'race') {
+            if (roomData.current_question && !battleQuestionLoaded) {
+                battleQuestionLoaded = true;
+                document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+                loadBattleDistrict(roomData.current_question);
+            } else if (!roomData.current_question && battlePlayerNumber === 1) {
+                // 房主出题
+                startRaceQuestion();
+            }
         }
     } else if (roomData.status === 'finished') {
         const winner = roomData.player1_score > roomData.player2_score ? roomData.player1 : 
