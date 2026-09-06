@@ -566,3 +566,40 @@ body {
         border-radius: 10px;
     }
 }
+
+#battlePanel button {
+    transition: all 0.2s ease;
+}
+
+#battlePanel button:hover {
+    transform: scale(1.03);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+#battlePanel button:active {
+    transform: scale(0.95);
+}
+
+#battleRoomPanel button {
+    transition: all 0.2s ease;
+}
+
+#battleRoomPanel button:hover {
+    transform: scale(1.03);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+#battleRoomPanel button:active {
+    transform: scale(0.95);
+}
+
+#battlePanel,
+#battleRoomPanel {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#battlePanel.hide,
+#battleRoomPanel.hide {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+}
