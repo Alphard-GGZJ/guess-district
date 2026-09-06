@@ -800,9 +800,21 @@ function openBattlePanel() {
     
     const bp = document.getElementById('battlePanel');
     bp.style.display = 'block';
-    bp.classList.remove('pop-in');
-    void bp.offsetWidth;
-    bp.classList.add('pop-in');
+    
+    // 动画加在内部 h3 上，不影响面板定位
+    const h3 = bp.querySelector('h3');
+    if (h3) {
+        h3.classList.remove('pop-in');
+        void h3.offsetWidth;
+        h3.classList.add('pop-in');
+    }
+    
+    // 内部元素淡入
+    const innerDiv = bp.querySelectorAll('div');
+    innerDiv.forEach((div, i) => {
+        div.style.opacity = '0';
+        div.style.animation = `fadeIn 0.3s ease-out ${i * 0.05}s forwards`;
+    });
 }
 
 function closeBattlePanel() {
@@ -908,9 +920,20 @@ function enterBattleRoom(infoText) {
     
     const brp = document.getElementById('battleRoomPanel');
     brp.style.display = 'block';
-    brp.classList.remove('pop-in');
-    void brp.offsetWidth;
-    brp.classList.add('pop-in');
+    
+    // 动画加在内部元素
+    const h3 = brp.querySelector('h3');
+    if (h3) {
+        h3.classList.remove('pop-in');
+        void h3.offsetWidth;
+        h3.classList.add('pop-in');
+    }
+    
+    const innerDiv = brp.querySelectorAll('div');
+    innerDiv.forEach((div, i) => {
+        div.style.opacity = '0';
+        div.style.animation = `fadeIn 0.3s ease-out ${i * 0.05}s forwards`;
+    });
     
     document.getElementById('battleRoomInfo').textContent = infoText;
     document.getElementById('battleInput').disabled = false;
