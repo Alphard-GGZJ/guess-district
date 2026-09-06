@@ -1067,7 +1067,10 @@ async function submitBattleAnswer() {
     
     if (data.mode === 'race') {
         if (!data.current_question) return;
+        const oldMode = gameMode;
+        gameMode = 'hard';
         const match = matchForMode(input);
+        gameMode = oldMode;
         if (match.status === 'exact') {
             const targetBase = data.current_question.replace(/（.+?）$/, '');
             const matchBase = match.name.replace(/（.+?）$/, '');
@@ -1076,7 +1079,10 @@ async function submitBattleAnswer() {
         }
     } else {
         if (!battleOwnQuestion) return;
+        const oldMode = gameMode;
+        gameMode = 'hard';
         const match = matchForMode(input);
+        gameMode = oldMode;
         if (match.status === 'exact') {
             const targetBase = battleOwnQuestion.replace(/（.+?）$/, '');
             const matchBase = match.name.replace(/（.+?）$/, '');
