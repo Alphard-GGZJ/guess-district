@@ -1,6 +1,6 @@
-const SUPABASE_URL = 'https://idcjqdqtdvkqvschnybt.supabaseClient.co';
+const SUPABASE_URL = 'https://idcjqdqtdvkqvschnybt.supabase.co';  // ✅ 去掉 Client
 const SUPABASE_KEY = 'sb_publishable_03tAFzmENygu60kEhN4FQg_7fkl8Nxa';
-const supabaseClient = window.supabaseClient.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = typeof supabase !== 'undefined' && supabase.createClient ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 function setMsg(text, className) {
     const msg = document.getElementById('msg');
