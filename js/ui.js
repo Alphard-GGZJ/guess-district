@@ -792,29 +792,14 @@ let battlePlayerNumber = null;
 let battleSubscription = null;
 let battleMode = 'race';
 let battleTimer = null;
+let battleOwnQuestion = null;
+let battleQuestionLoaded = false;
 
 function openBattlePanel() {
     playSound('click');
     document.getElementById('panel').style.display = 'none';
     document.getElementById('miniGamesPanel').style.display = 'none';
-    
-    const bp = document.getElementById('battlePanel');
-    bp.style.display = 'block';
-    
-    // 动画加在内部 h3 上，不影响面板定位
-    const h3 = bp.querySelector('h3');
-    if (h3) {
-        h3.classList.remove('pop-in');
-        void h3.offsetWidth;
-        h3.classList.add('pop-in');
-    }
-    
-    // 内部元素淡入
-    const innerDiv = bp.querySelectorAll('div');
-    innerDiv.forEach((div, i) => {
-        div.style.opacity = '0';
-        div.style.animation = `fadeIn 0.3s ease-out ${i * 0.05}s forwards`;
-    });
+    document.getElementById('battlePanel').style.display = 'block';
 }
 
 function closeBattlePanel() {
@@ -824,22 +809,16 @@ function closeBattlePanel() {
     document.getElementById('panelContent').style.display = 'block';
 }
 
-// 模式切换
-document.getElementById('battleModeSelect')?.addEventListener('change', function() {
-    if (this.value === 'score') {
-        document.getElementById('battleTargetScoreDiv').style.display = 'none';
-        document.getElementById('battleDurationDiv').style.display = 'block';
-    } else {
-        document.getElementById('battleTargetScoreDiv').style.display = 'block';
-        document.getElementById('battleDurationDiv').style.display = 'none';
-    }
-});
-
 function generateRoomId() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
 async function createBattleRoom() {
+    if (!supabaseClient) {
+        alert('Supabase 未加载，请刷新');
+        return;
+    }
+    
     const name = document.getElementById('battlePlayerName').value.trim();
     if (!name) {
         alert('请输入昵称');
@@ -850,6 +829,7 @@ async function createBattleRoom() {
     battlePlayerNumber = 1;
     battleRoomId = generateRoomId();
     battleMode = document.getElementById('battleModeSelect').value;
+    battleQuestionLoaded = false;
     
     const targetScore = parseInt(document.getElementById('battleTargetScore').value) || 5;
     const duration = parseInt(document.getElementById('battleDuration').value) || 60;
@@ -872,11 +852,20 @@ async function createBattleRoom() {
         return;
     }
     
-    enterBattleRoom(`房间号: ${battleRoomId} | 等待对手加入...`);
+    document.getElementById('battlePanel').style.display = 'none';
+    document.getElementById('battleRoomPanel').style.display = 'block';
+    document.getElementById('battleRoomInfo').textContent = `房间号: ${battleRoomId} | 等待对手加入...`;
+    document.getElementById('battleScore').textContent = `${name}: 0 分 | 等待对手: 0 分`;
+    
     subscribeBattleRoom();
 }
 
 async function joinBattleRoom() {
+    if (!supabaseClient) {
+        alert('Supabase 未加载，请刷新');
+        return;
+    }
+    
     const name = document.getElementById('battlePlayerName').value.trim();
     const roomId = document.getElementById('battleRoomInput').value.trim().toUpperCase();
     
@@ -892,6 +881,7 @@ async function joinBattleRoom() {
     battlePlayerName = name;
     battlePlayerNumber = 2;
     battleRoomId = roomId;
+    battleQuestionLoaded = false;
     
     const { data, error } = await supabaseClient
         .from('battle_rooms')
@@ -905,47 +895,25 @@ async function joinBattleRoom() {
     }
     
     battleMode = data[0].mode;
-    enterBattleRoom(`房间号: ${battleRoomId} | 对战开始！`);
+    
+    document.getElementById('battlePanel').style.display = 'none';
+    document.getElementById('battleRoomPanel').style.display = 'block';
+    document.getElementById('battleRoomInfo').textContent = `房间号: ${battleRoomId} | 对战进行中！`;
+    document.getElementById('battleScore').textContent = `${data[0].player1}: ${data[0].player1_score} 分 | ${name}: 0 分`;
+    document.getElementById('battleInput').disabled = false;
+    
     subscribeBattleRoom();
     
-    // 再次更新触发 realtime 通知
-    await supabaseClient
-        .from('battle_rooms')
-        .update({ status: 'playing', player2: name })
-        .eq('id', roomId);
-    
     if (battleMode === 'race') {
-        startRaceQuestion();
+        await startRaceQuestion();
     } else {
         startScoreBattle();
     }
 }
 
-function enterBattleRoom(infoText) {
-    document.getElementById('battlePanel').style.display = 'none';
-    
-    const brp = document.getElementById('battleRoomPanel');
-    brp.style.display = 'block';
-    
-    // 动画加在内部元素
-    const h3 = brp.querySelector('h3');
-    if (h3) {
-        h3.classList.remove('pop-in');
-        void h3.offsetWidth;
-        h3.classList.add('pop-in');
-    }
-    
-    const innerDiv = brp.querySelectorAll('div');
-    innerDiv.forEach((div, i) => {
-        div.style.opacity = '0';
-        div.style.animation = `fadeIn 0.3s ease-out ${i * 0.05}s forwards`;
-    });
-    
-    document.getElementById('battleRoomInfo').textContent = infoText;
-    document.getElementById('battleInput').disabled = false;
-}
-
 async function subscribeBattleRoom() {
+    if (!supabaseClient) return;
+    
     if (battleSubscription) {
         supabaseClient.removeChannel(battleSubscription);
     }
@@ -953,22 +921,33 @@ async function subscribeBattleRoom() {
     battleSubscription = supabaseClient
         .channel('room_' + battleRoomId)
         .on('postgres_changes', 
-            { event: '*', schema: 'public', table: 'battle_rooms', filter: 'id=eq.' + battleRoomId },
+            { event: 'UPDATE', schema: 'public', table: 'battle_rooms', filter: 'id=eq.' + battleRoomId },
             (payload) => {
-                updateBattleUI(payload.new);
+                handleBattleUpdate(payload.new);
             }
         )
         .subscribe();
 }
 
-function updateBattleUI(roomData) {
+function handleBattleUpdate(roomData) {
     if (!roomData) return;
     
-    const score = document.getElementById('battleScore');
-    score.textContent = `${roomData.player1 || '玩家1'}: ${roomData.player1_score} 分 | ${roomData.player2 || '玩家2'}: ${roomData.player2_score} 分`;
+    // 更新分数显示
+    document.getElementById('battleScore').textContent = 
+        `${roomData.player1 || '玩家1'}: ${roomData.player1_score} 分 | ${roomData.player2 || '玩家2'}: ${roomData.player2_score} 分`;
     
     if (roomData.status === 'waiting') {
         document.getElementById('battleRoomInfo').textContent = `房间号: ${battleRoomId} | 等待对手加入...`;
+    } else if (roomData.status === 'playing') {
+        document.getElementById('battleRoomInfo').textContent = `房间号: ${battleRoomId} | 对战进行中！`;
+        document.getElementById('battleInput').disabled = false;
+        
+        // 竞速模式：双方加载同一道题
+        if (roomData.mode === 'race' && roomData.current_question && !battleQuestionLoaded) {
+            battleQuestionLoaded = true;
+            document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+            loadDistrict(roomData.current_question);
+        }
     } else if (roomData.status === 'finished') {
         const winner = roomData.player1_score > roomData.player2_score ? roomData.player1 : 
                       roomData.player1_score < roomData.player2_score ? roomData.player2 : '平局';
@@ -980,21 +959,7 @@ function updateBattleUI(roomData) {
 
 // ==================== 模式1：竞速对决 ====================
 async function startRaceQuestion() {
-    const districts = Object.keys(ADJACENCY);
-    const randomDistrict = districts[Math.floor(Math.random() * districts.length)];
-    
-    await supabaseClient
-        .from('battle_rooms')
-        .update({ current_question: randomDistrict })
-        .eq('id', battleRoomId);
-    
-    document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
-    loadDistrict(randomDistrict);
-}
-
-async function submitBattleAnswer() {
-    const input = document.getElementById('battleInput').value.trim();
-    if (!input || !battleRoomId) return;
+    if (!supabaseClient || !battleRoomId) return;
     
     const { data } = await supabaseClient
         .from('battle_rooms')
@@ -1002,35 +967,83 @@ async function submitBattleAnswer() {
         .eq('id', battleRoomId)
         .single();
     
-    if (!data || !data.current_question) return;
+    if (data && data.current_question) {
+        battleQuestionLoaded = true;
+        document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+        loadDistrict(data.current_question);
+        return;
+    }
     
-    const match = matchForMode(input);
+    // 没有题目，创建新题（由房主创建）
+    if (battlePlayerNumber === 1) {
+        const districts = Object.keys(ADJACENCY);
+        const randomDistrict = districts[Math.floor(Math.random() * districts.length)];
+        
+        await supabaseClient
+            .from('battle_rooms')
+            .update({ current_question: randomDistrict })
+            .eq('id', battleRoomId);
+        
+        battleQuestionLoaded = true;
+        document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+        loadDistrict(randomDistrict);
+    }
+}
+
+async function submitBattleAnswer() {
+    if (!supabaseClient || !battleRoomId) return;
+    
+    const input = document.getElementById('battleInput').value.trim();
+    if (!input) return;
+    
+    const { data } = await supabaseClient
+        .from('battle_rooms')
+        .select('current_question, mode')
+        .eq('id', battleRoomId)
+        .single();
+    
+    if (!data) return;
+    
     let correct = false;
     
-    if (match.status === 'exact') {
-        const targetBase = data.current_question.replace(/（.+?）$/, '');
-        const matchBase = match.name.replace(/（.+?）$/, '');
-        correct = match.name === data.current_question || matchBase === targetBase;
+    if (data.mode === 'race') {
+        if (!data.current_question) return;
+        const match = matchForMode(input);
+        if (match.status === 'exact') {
+            const targetBase = data.current_question.replace(/（.+?）$/, '');
+            const matchBase = match.name.replace(/（.+?）$/, '');
+            correct = match.name === data.current_question || matchBase === targetBase;
+        }
+    } else {
+        if (!battleOwnQuestion) return;
+        const match = matchForMode(input);
+        if (match.status === 'exact') {
+            const targetBase = battleOwnQuestion.replace(/（.+?）$/, '');
+            const matchBase = match.name.replace(/（.+?）$/, '');
+            correct = match.name === battleOwnQuestion || matchBase === targetBase;
+        }
     }
+    
+    document.getElementById('battleInput').value = '';
     
     if (correct) {
         playSound('correct');
-        document.getElementById('battleInput').value = '';
+        await addBattleScore();
         
-        if (battleMode === 'race') {
-            // 竞速：加分，检查是否到目标分
-            await addBattleScore();
+        if (data.mode === 'race') {
+            // 清除当前题目，等下一题
+            battleQuestionLoaded = false;
         } else {
-            // 竞分：加分，不换题
-            await addBattleScore();
+            generateOwnQuestion();
         }
     } else {
         playSound('wrong');
-        document.getElementById('battleInput').value = '';
     }
 }
 
 async function addBattleScore() {
+    if (!supabaseClient || !battleRoomId) return;
+    
     const scoreField = battlePlayerNumber === 1 ? 'player1_score' : 'player2_score';
     
     const { data: roomData } = await supabaseClient
@@ -1038,6 +1051,8 @@ async function addBattleScore() {
         .select('player1_score, player2_score, target_score, mode')
         .eq('id', battleRoomId)
         .single();
+    
+    if (!roomData) return;
     
     const newScore = (battlePlayerNumber === 1 ? roomData.player1_score : roomData.player2_score) + 1;
     
@@ -1051,16 +1066,13 @@ async function addBattleScore() {
             .from('battle_rooms')
             .update({ status: 'finished' })
             .eq('id', battleRoomId);
-    } else if (roomData.mode === 'race') {
-        startRaceQuestion();
     }
 }
 
 // ==================== 模式2：竞分对决 ====================
-let battleOwnQuestion = null;
-
 async function startScoreBattle() {
-    // 从服务器获取设置
+    if (!supabaseClient || !battleRoomId) return;
+    
     const { data } = await supabaseClient
         .from('battle_rooms')
         .select('duration')
@@ -1069,19 +1081,19 @@ async function startScoreBattle() {
     
     const duration = data?.duration || 60;
     
-    // 开始计时
     let timeLeft = duration;
     document.getElementById('battleRoomInfo').textContent = `⏱ 剩余时间: ${timeLeft}秒`;
     
+    if (battleTimer) clearInterval(battleTimer);
     battleTimer = setInterval(async () => {
         timeLeft--;
         document.getElementById('battleRoomInfo').textContent = `⏱ 剩余时间: ${timeLeft}秒`;
         
         if (timeLeft <= 0) {
             clearInterval(battleTimer);
+            battleTimer = null;
             document.getElementById('battleInput').disabled = true;
             
-            // 判断是否是玩家1（由玩家1来结束比赛）
             if (battlePlayerNumber === 1) {
                 await supabaseClient
                     .from('battle_rooms')
@@ -1091,11 +1103,11 @@ async function startScoreBattle() {
         }
     }, 1000);
     
-    // 生成自己的题目
     generateOwnQuestion();
 }
 
 function generateOwnQuestion() {
+    if (!battleRoomId) return;
     const districts = Object.keys(ADJACENCY);
     battleOwnQuestion = districts[Math.floor(Math.random() * districts.length)];
     
@@ -1119,6 +1131,7 @@ async function leaveBattleRoom() {
     battleRoomId = null;
     battlePlayerNumber = null;
     battleOwnQuestion = null;
+    battleQuestionLoaded = false;
     
     document.getElementById('battleRoomPanel').style.display = 'none';
     document.getElementById('battlePanel').style.display = 'block';
