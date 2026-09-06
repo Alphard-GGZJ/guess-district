@@ -786,11 +786,39 @@ function skipDailyQuestion() {
     }, 500);
 }
 
+const battleDistrictCache = {};
+
 function loadBattleDistrict(name) {
-    const oldMode = gameMode;
-    gameMode = 'hard';
-    loadDistrict(name);
-    gameMode = oldMode;
+    const baseName = name.replace(/（.+?）$/, '');
+    
+    // 有缓存直接用
+    if (battleDistrictCache[baseName]) {
+        const d = battleDistrictCache[baseName];
+        if (window.innerWidth <= 768) {
+            drawDistrictOnCanvas(d);
+        } else {
+            showDistrict(d);
+        }
+        return;
+    }
+    
+    function attempt(retry) {
+        ds.search(baseName, (status, result) => {
+            if (status === 'complete' && result.districtList.length > 0) {
+                const d = result.districtList.find(x => x.level === 'district') || result.districtList[0];
+                battleDistrictCache[baseName] = d;
+                if (window.innerWidth <= 768) {
+                    drawDistrictOnCanvas(d);
+                } else {
+                    showDistrict(d);
+                }
+            } else if (retry > 0) {
+                setTimeout(() => attempt(retry - 1), 300);
+            }
+        });
+    }
+    
+    attempt(5);
 }
 
 // ==================== 好友对决 ====================
@@ -1273,15 +1301,18 @@ function toggleBattleCollapse() {
     const brp = document.getElementById('battleRoomPanel');
     const btn = document.getElementById('battleCollapseBtn');
     
-    // 要收起的内容（除了标题和收起按钮）
-    const contents = brp.querySelectorAll('#battleRoomInfo, #battleScore, #battleQuestion, #battleInput, #battleSubmitBtn, #btnBattleLeave');
-    
     if (brp.classList.contains('collapsed')) {
-        contents.forEach(el => el.style.display = '');
+        // 展开
+        brp.querySelectorAll('#battleRoomInfo, #battleScore, #battleQuestion, #battleInput, #battleSubmitBtn, #btnBattleLeave').forEach(el => {
+            el.style.display = '';
+        });
         brp.classList.remove('collapsed');
         btn.textContent = '收起';
     } else {
-        contents.forEach(el => el.style.display = 'none');
+        // 收起
+        brp.querySelectorAll('#battleRoomInfo, #battleScore, #battleQuestion, #battleInput, #battleSubmitBtn, #btnBattleLeave').forEach(el => {
+            el.style.display = 'none';
+        });
         brp.classList.add('collapsed');
         btn.textContent = '展开';
     }
