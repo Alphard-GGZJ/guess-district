@@ -1,3 +1,7 @@
+const SUPABASE_URL = 'https://idcjqdqtdvkqvschnybt.supabaseClient.co';
+const SUPABASE_KEY = 'sb_publishable_03tAFzmENygu60kEhN4FQg_7fkl8Nxa';
+const supabaseClient = window.supabaseClient.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 function setMsg(text, className) {
     const msg = document.getElementById('msg');
     msg.textContent = text;
@@ -5,6 +9,15 @@ function setMsg(text, className) {
 }
 
 function bindUI() {
+        document.getElementById('btnBattle').addEventListener('click', openBattlePanel);
+    document.getElementById('btnBattleExit').addEventListener('click', closeBattlePanel);
+    document.getElementById('btnBattleCreate').addEventListener('click', createBattleRoom);
+    document.getElementById('btnBattleJoin').addEventListener('click', joinBattleRoom);
+    document.getElementById('btnBattleLeave').addEventListener('click', leaveBattleRoom);
+    document.getElementById('battleSubmitBtn').addEventListener('click', submitBattleAnswer);
+    document.getElementById('battleInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitBattleAnswer();
+    });
         document.getElementById('dailySkipBtn').addEventListener('click', skipDailyQuestion);
     document.getElementById('showAnswer').addEventListener('click', showAnswer);
     document.getElementById('submitBtn').addEventListener('click', checkAnswer);
@@ -770,4 +783,306 @@ function skipDailyQuestion() {
         document.getElementById('dailySkipBtn').disabled = false;
         loadDailyQuestion();
     }, 500);
+}
+
+// ==================== 好友对决 ====================
+let battleRoomId = null;
+let battlePlayerName = '';
+let battlePlayerNumber = null;
+let battleSubscription = null;
+let battleMode = 'race';
+let battleTimer = null;
+
+function openBattlePanel() {
+    playSound('click');
+    document.getElementById('panel').style.display = 'none';
+    document.getElementById('miniGamesPanel').style.display = 'none';
+    document.getElementById('battlePanel').style.display = 'block';
+    document.getElementById('battlePanel').classList.add('pop-in');
+}
+
+function closeBattlePanel() {
+    playSound('click');
+    document.getElementById('battlePanel').style.display = 'none';
+    document.getElementById('panel').style.display = 'block';
+    document.getElementById('panelContent').style.display = 'block';
+}
+
+// 模式切换
+document.getElementById('battleModeSelect')?.addEventListener('change', function() {
+    if (this.value === 'score') {
+        document.getElementById('battleTargetScoreDiv').style.display = 'none';
+        document.getElementById('battleDurationDiv').style.display = 'block';
+    } else {
+        document.getElementById('battleTargetScoreDiv').style.display = 'block';
+        document.getElementById('battleDurationDiv').style.display = 'none';
+    }
+});
+
+function generateRoomId() {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+async function createBattleRoom() {
+    const name = document.getElementById('battlePlayerName').value.trim();
+    if (!name) {
+        alert('请输入昵称');
+        return;
+    }
+    
+    battlePlayerName = name;
+    battlePlayerNumber = 1;
+    battleRoomId = generateRoomId();
+    battleMode = document.getElementById('battleModeSelect').value;
+    
+    const targetScore = parseInt(document.getElementById('battleTargetScore').value) || 5;
+    const duration = parseInt(document.getElementById('battleDuration').value) || 60;
+    
+    const { error } = await supabaseClient
+        .from('battle_rooms')
+        .insert({
+            id: battleRoomId,
+            mode: battleMode,
+            target_score: targetScore,
+            duration: duration,
+            status: 'waiting',
+            player1: name,
+            player1_score: 0,
+            player2_score: 0
+        });
+    
+    if (error) {
+        alert('创建房间失败: ' + error.message);
+        return;
+    }
+    
+    enterBattleRoom(`房间号: ${battleRoomId} | 等待对手加入...`);
+    subscribeBattleRoom();
+}
+
+async function joinBattleRoom() {
+    const name = document.getElementById('battlePlayerName').value.trim();
+    const roomId = document.getElementById('battleRoomInput').value.trim().toUpperCase();
+    
+    if (!name) {
+        alert('请输入昵称');
+        return;
+    }
+    if (!roomId) {
+        alert('请输入房间号');
+        return;
+    }
+    
+    battlePlayerName = name;
+    battlePlayerNumber = 2;
+    battleRoomId = roomId;
+    
+    const { data, error } = await supabaseClient
+        .from('battle_rooms')
+        .update({ player2: name, status: 'playing' })
+        .eq('id', roomId)
+        .select();
+    
+    if (error || !data || data.length === 0) {
+        alert('加入房间失败，检查房间号');
+        return;
+    }
+    
+    battleMode = data[0].mode;
+    enterBattleRoom(`房间号: ${battleRoomId} | 对战开始！`);
+    subscribeBattleRoom();
+    
+    if (battleMode === 'race') {
+        startRaceQuestion();
+    } else {
+        startScoreBattle();
+    }
+}
+
+function enterBattleRoom(infoText) {
+    document.getElementById('battlePanel').style.display = 'none';
+    document.getElementById('battleRoomPanel').style.display = 'block';
+    document.getElementById('battleRoomInfo').textContent = infoText;
+    document.getElementById('battleInput').disabled = false;
+}
+
+async function subscribeBattleRoom() {
+    if (battleSubscription) {
+        supabaseClient.removeChannel(battleSubscription);
+    }
+    
+    battleSubscription = supabaseClient
+        .channel('room_' + battleRoomId)
+        .on('postgres_changes', 
+            { event: '*', schema: 'public', table: 'battle_rooms', filter: 'id=eq.' + battleRoomId },
+            (payload) => {
+                updateBattleUI(payload.new);
+            }
+        )
+        .subscribe();
+}
+
+function updateBattleUI(roomData) {
+    if (!roomData) return;
+    
+    const score = document.getElementById('battleScore');
+    score.textContent = `${roomData.player1 || '玩家1'}: ${roomData.player1_score} 分 | ${roomData.player2 || '玩家2'}: ${roomData.player2_score} 分`;
+    
+    if (roomData.status === 'waiting') {
+        document.getElementById('battleRoomInfo').textContent = `房间号: ${battleRoomId} | 等待对手加入...`;
+    } else if (roomData.status === 'finished') {
+        const winner = roomData.player1_score > roomData.player2_score ? roomData.player1 : 
+                      roomData.player1_score < roomData.player2_score ? roomData.player2 : '平局';
+        document.getElementById('battleRoomInfo').textContent = `🏆 ${winner} 获胜！`;
+        document.getElementById('battleInput').disabled = true;
+        if (battleTimer) clearInterval(battleTimer);
+    }
+}
+
+// ==================== 模式1：竞速对决 ====================
+async function startRaceQuestion() {
+    const districts = Object.keys(ADJACENCY);
+    const randomDistrict = districts[Math.floor(Math.random() * districts.length)];
+    
+    await supabaseClient
+        .from('battle_rooms')
+        .update({ current_question: randomDistrict })
+        .eq('id', battleRoomId);
+    
+    document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+    loadDistrict(randomDistrict);
+}
+
+async function submitBattleAnswer() {
+    const input = document.getElementById('battleInput').value.trim();
+    if (!input || !battleRoomId) return;
+    
+    const { data } = await supabaseClient
+        .from('battle_rooms')
+        .select('current_question')
+        .eq('id', battleRoomId)
+        .single();
+    
+    if (!data || !data.current_question) return;
+    
+    const match = matchForMode(input);
+    let correct = false;
+    
+    if (match.status === 'exact') {
+        const targetBase = data.current_question.replace(/（.+?）$/, '');
+        const matchBase = match.name.replace(/（.+?）$/, '');
+        correct = match.name === data.current_question || matchBase === targetBase;
+    }
+    
+    if (correct) {
+        playSound('correct');
+        document.getElementById('battleInput').value = '';
+        
+        if (battleMode === 'race') {
+            // 竞速：加分，检查是否到目标分
+            await addBattleScore();
+        } else {
+            // 竞分：加分，不换题
+            await addBattleScore();
+        }
+    } else {
+        playSound('wrong');
+        document.getElementById('battleInput').value = '';
+    }
+}
+
+async function addBattleScore() {
+    const scoreField = battlePlayerNumber === 1 ? 'player1_score' : 'player2_score';
+    
+    const { data: roomData } = await supabaseClient
+        .from('battle_rooms')
+        .select('player1_score, player2_score, target_score, mode')
+        .eq('id', battleRoomId)
+        .single();
+    
+    const newScore = (battlePlayerNumber === 1 ? roomData.player1_score : roomData.player2_score) + 1;
+    
+    await supabaseClient
+        .from('battle_rooms')
+        .update({ [scoreField]: newScore })
+        .eq('id', battleRoomId);
+    
+    if (roomData.mode === 'race' && newScore >= roomData.target_score) {
+        await supabaseClient
+            .from('battle_rooms')
+            .update({ status: 'finished' })
+            .eq('id', battleRoomId);
+    } else if (roomData.mode === 'race') {
+        startRaceQuestion();
+    }
+}
+
+// ==================== 模式2：竞分对决 ====================
+let battleOwnQuestion = null;
+
+async function startScoreBattle() {
+    // 从服务器获取设置
+    const { data } = await supabaseClient
+        .from('battle_rooms')
+        .select('duration')
+        .eq('id', battleRoomId)
+        .single();
+    
+    const duration = data?.duration || 60;
+    
+    // 开始计时
+    let timeLeft = duration;
+    document.getElementById('battleRoomInfo').textContent = `⏱ 剩余时间: ${timeLeft}秒`;
+    
+    battleTimer = setInterval(async () => {
+        timeLeft--;
+        document.getElementById('battleRoomInfo').textContent = `⏱ 剩余时间: ${timeLeft}秒`;
+        
+        if (timeLeft <= 0) {
+            clearInterval(battleTimer);
+            document.getElementById('battleInput').disabled = true;
+            
+            // 判断是否是玩家1（由玩家1来结束比赛）
+            if (battlePlayerNumber === 1) {
+                await supabaseClient
+                    .from('battle_rooms')
+                    .update({ status: 'finished' })
+                    .eq('id', battleRoomId);
+            }
+        }
+    }, 1000);
+    
+    // 生成自己的题目
+    generateOwnQuestion();
+}
+
+function generateOwnQuestion() {
+    const districts = Object.keys(ADJACENCY);
+    battleOwnQuestion = districts[Math.floor(Math.random() * districts.length)];
+    
+    document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+    loadDistrict(battleOwnQuestion);
+}
+
+async function leaveBattleRoom() {
+    playSound('click');
+    
+    if (battleSubscription) {
+        supabaseClient.removeChannel(battleSubscription);
+        battleSubscription = null;
+    }
+    
+    if (battleTimer) {
+        clearInterval(battleTimer);
+        battleTimer = null;
+    }
+    
+    battleRoomId = null;
+    battlePlayerNumber = null;
+    battleOwnQuestion = null;
+    
+    document.getElementById('battleRoomPanel').style.display = 'none';
+    document.getElementById('battlePanel').style.display = 'block';
+    document.getElementById('battleInput').disabled = false;
+    document.getElementById('battleInput').value = '';
 }
