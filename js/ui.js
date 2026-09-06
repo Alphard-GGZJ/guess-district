@@ -824,21 +824,29 @@ function openBattlePanel() {
     
     const bp = document.getElementById('battlePanel');
     bp.style.display = 'block';
-    bp.style.opacity = '0';
-    bp.style.transition = 'opacity 0.3s ease';
-    setTimeout(() => { bp.style.opacity = '1'; }, 10);
+    bp.classList.remove('pop-in');
+    void bp.offsetWidth;
+    bp.classList.add('pop-in');
 }
 
 function closeBattlePanel() {
     playSound('click');
     const bp = document.getElementById('battlePanel');
+    bp.style.transform = 'scale(0.85)';
     bp.style.opacity = '0';
-    bp.style.transition = 'opacity 0.2s ease';
+    bp.style.transition = 'all 0.2s ease';
+    
     setTimeout(() => {
         bp.style.display = 'none';
-        bp.style.opacity = '1';
+        bp.style.transform = '';
+        bp.style.opacity = '';
+        bp.style.transition = '';
+        
         document.getElementById('panel').style.display = 'block';
         document.getElementById('panelContent').style.display = 'block';
+        document.getElementById('panel').classList.remove('pop-in');
+        void document.getElementById('panel').offsetWidth;
+        document.getElementById('panel').classList.add('pop-in');
     }, 200);
 }
 
@@ -851,8 +859,9 @@ function enterBattleRoom(infoText) {
     
     const brp = document.getElementById('battleRoomPanel');
     brp.style.display = 'block';
-    brp.style.opacity = '0';
-    brp.style.transition = 'opacity 0.3s ease';
+    brp.classList.remove('pop-in');
+    void brp.offsetWidth;
+    brp.classList.add('pop-in');
     
     brp.style.setProperty('position', 'fixed', 'important');
     brp.style.setProperty('top', '10px', 'important');
@@ -866,9 +875,7 @@ function enterBattleRoom(infoText) {
     brp.style.setProperty('padding', '12px', 'important');
     brp.style.setProperty('border-radius', '10px', 'important');
     brp.style.setProperty('box-shadow', '0 4px 15px rgba(0,0,0,0.2)', 'important');
-    
-    setTimeout(() => { brp.style.opacity = '1'; }, 10);
-    
+        
     document.getElementById('battleRoomInfo').textContent = infoText;
     document.getElementById('battleInput').disabled = false;
     document.getElementById('battleInput').value = '';
@@ -1208,12 +1215,18 @@ async function leaveBattleRoom() {
     battleAnswered = false;
     
     const brp = document.getElementById('battleRoomPanel');
+    brp.style.transform = 'scale(0.85)';
     brp.style.opacity = '0';
-    brp.style.transition = 'opacity 0.2s ease';
+    brp.style.transition = 'all 0.2s ease';
     setTimeout(() => {
         brp.style.display = 'none';
-        brp.style.opacity = '1';
+        brp.style.transform = '';
+        brp.style.opacity = '';
+        brp.style.transition = '';
         document.getElementById('battlePanel').style.display = 'block';
+        document.getElementById('battlePanel').classList.remove('pop-in');
+        void document.getElementById('battlePanel').offsetWidth;
+        document.getElementById('battlePanel').classList.add('pop-in');
     }, 200);
     
     document.getElementById('battleInput').disabled = false;
