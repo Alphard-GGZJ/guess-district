@@ -1015,16 +1015,13 @@ function handleBattleUpdate(roomData) {
         document.getElementById('battleRoomInfo').textContent = `房间号: ${battleRoomId} | 对战进行中！`;
         document.getElementById('battleInput').disabled = false;
         
-                if (roomData.mode === 'race') {
+        if (roomData.mode === 'race') {
             if (roomData.current_question === null) {
                 // 有人答对了，锁定输入并提示
                 document.getElementById('battleInput').disabled = true;
                 document.getElementById('battleQuestion').textContent = '⏳ 对方已答对，等待下一题...';
                 document.getElementById('battleQuestion').style.display = 'block';
             } else if (roomData.current_question !== battleLastQuestion) {
-
-        if (roomData.mode === 'race') {
-            if (roomData.current_question !== null && roomData.current_question !== battleLastQuestion) {
                 battleLastQuestion = roomData.current_question;
                 battleAnswered = false;
                 battleQuestionLoaded = true;
