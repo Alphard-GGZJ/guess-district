@@ -800,17 +800,16 @@ function openBattlePanel() {
     
     const bp = document.getElementById('battlePanel');
     bp.style.display = 'block';
-    bp.style.position = 'fixed';
-    bp.style.top = '50%';
-    bp.style.left = '50%';
-    bp.style.transform = 'translate(-50%,-50%)';
-    bp.style.zIndex = '99999';
-    bp.style.background = 'white';
-    bp.style.padding = '25px';
-    bp.style.borderRadius = '16px';
-    bp.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
-    bp.style.minWidth = '300px';
-    bp.classList.add('pop-in');
+    bp.style.setProperty('position', 'fixed', 'important');
+    bp.style.setProperty('top', '50%', 'important');
+    bp.style.setProperty('left', '50%', 'important');
+    bp.style.setProperty('transform', 'translate(-50%,-50%)', 'important');
+    bp.style.setProperty('z-index', '99999', 'important');
+    bp.style.setProperty('background', 'white', 'important');
+    bp.style.setProperty('padding', '25px', 'important');
+    bp.style.setProperty('border-radius', '16px', 'important');
+    bp.style.setProperty('box-shadow', '0 10px 30px rgba(0,0,0,0.3)', 'important');
+    bp.style.setProperty('min-width', '300px', 'important');
 }
 
 function closeBattlePanel() {
@@ -916,16 +915,16 @@ function enterBattleRoom(infoText) {
     
     const brp = document.getElementById('battleRoomPanel');
     brp.style.display = 'block';
-    brp.style.position = 'fixed';
-    brp.style.top = '50%';
-    brp.style.left = '50%';
-    brp.style.transform = 'translate(-50%,-50%)';
-    brp.style.zIndex = '99999';
-    brp.style.background = 'white';
-    brp.style.padding = '25px';
-    brp.style.borderRadius = '16px';
-    brp.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
-    brp.style.minWidth = '300px';
+    brp.style.setProperty('position', 'fixed', 'important');
+    brp.style.setProperty('top', '50%', 'important');
+    brp.style.setProperty('left', '50%', 'important');
+    brp.style.setProperty('transform', 'translate(-50%,-50%)', 'important');
+    brp.style.setProperty('z-index', '99999', 'important');
+    brp.style.setProperty('background', 'white', 'important');
+    brp.style.setProperty('padding', '25px', 'important');
+    brp.style.setProperty('border-radius', '16px', 'important');
+    brp.style.setProperty('box-shadow', '0 10px 30px rgba(0,0,0,0.3)', 'important');
+    brp.style.setProperty('min-width', '300px', 'important');
     
     document.getElementById('battleRoomInfo').textContent = infoText;
     document.getElementById('battleInput').disabled = false;
