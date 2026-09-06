@@ -908,6 +908,12 @@ async function joinBattleRoom() {
     enterBattleRoom(`房间号: ${battleRoomId} | 对战开始！`);
     subscribeBattleRoom();
     
+    // 再次更新触发 realtime 通知
+    await supabaseClient
+        .from('battle_rooms')
+        .update({ status: 'playing', player2: name })
+        .eq('id', roomId);
+    
     if (battleMode === 'race') {
         startRaceQuestion();
     } else {
