@@ -801,10 +801,10 @@ let battleMode = 'race';
 let battleTimer = null;
 let battleOwnQuestion = null;
 let battleQuestionLoaded = false;
+let battleAnswered = false;
 
 function openBattlePanel() {
     playSound('click');
-    
     dailyMode = false;
     findDifferentMode = false;
     
@@ -826,39 +826,66 @@ function openBattlePanel() {
     bp.style.display = 'block';
     bp.style.opacity = '0';
     bp.style.transition = 'opacity 0.3s ease';
-    setTimeout(() => {
-        bp.style.opacity = '1';
-    }, 10);
+    setTimeout(() => { bp.style.opacity = '1'; }, 10);
 }
 
 function closeBattlePanel() {
     playSound('click');
-    document.getElementById('battlePanel').style.display = 'none';
-    document.getElementById('panel').style.display = 'block';
-    document.getElementById('panelContent').style.display = 'block';
+    const bp = document.getElementById('battlePanel');
+    bp.style.opacity = '0';
+    bp.style.transition = 'opacity 0.2s ease';
+    setTimeout(() => {
+        bp.style.display = 'none';
+        bp.style.opacity = '1';
+        document.getElementById('panel').style.display = 'block';
+        document.getElementById('panelContent').style.display = 'block';
+    }, 200);
 }
 
 function generateRoomId() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+function enterBattleRoom(infoText) {
+    document.getElementById('battlePanel').style.display = 'none';
+    
+    const brp = document.getElementById('battleRoomPanel');
+    brp.style.display = 'block';
+    brp.style.opacity = '0';
+    brp.style.transition = 'opacity 0.3s ease';
+    
+    brp.style.setProperty('position', 'fixed', 'important');
+    brp.style.setProperty('top', '10px', 'important');
+    brp.style.setProperty('left', '10px', 'important');
+    brp.style.setProperty('transform', 'none', 'important');
+    brp.style.setProperty('max-width', '280px', 'important');
+    brp.style.setProperty('max-height', '70vh', 'important');
+    brp.style.setProperty('overflow-y', 'auto', 'important');
+    brp.style.setProperty('z-index', '1000', 'important');
+    brp.style.setProperty('background', 'white', 'important');
+    brp.style.setProperty('padding', '12px', 'important');
+    brp.style.setProperty('border-radius', '10px', 'important');
+    brp.style.setProperty('box-shadow', '0 4px 15px rgba(0,0,0,0.2)', 'important');
+    
+    setTimeout(() => { brp.style.opacity = '1'; }, 10);
+    
+    document.getElementById('battleRoomInfo').textContent = infoText;
+    document.getElementById('battleInput').disabled = false;
+    document.getElementById('battleInput').value = '';
+}
+
 async function createBattleRoom() {
-    if (!supabaseClient) {
-        alert('Supabase 未加载，请刷新');
-        return;
-    }
+    if (!supabaseClient) { alert('Supabase 未加载，请刷新'); return; }
     
     const name = document.getElementById('battlePlayerName').value.trim();
-    if (!name) {
-        alert('请输入昵称');
-        return;
-    }
+    if (!name) { alert('请输入昵称'); return; }
     
     battlePlayerName = name;
     battlePlayerNumber = 1;
     battleRoomId = generateRoomId();
     battleMode = document.getElementById('battleModeSelect').value;
     battleQuestionLoaded = false;
+    battleAnswered = false;
     
     const targetScore = parseInt(document.getElementById('battleTargetScore').value) || 5;
     const duration = parseInt(document.getElementById('battleDuration').value) || 60;
@@ -876,41 +903,27 @@ async function createBattleRoom() {
             player2_score: 0
         });
     
-    if (error) {
-        alert('创建房间失败: ' + error.message);
-        return;
-    }
+    if (error) { alert('创建房间失败: ' + error.message); return; }
     
-    document.getElementById('battlePanel').style.display = 'none';
-    document.getElementById('battleRoomPanel').style.display = 'block';
-    document.getElementById('battleRoomInfo').textContent = `房间号: ${battleRoomId} | 等待对手加入...`;
-    document.getElementById('battleScore').textContent = `${name}: 0 分 | 等待对手: 0 分`;
-    
+    enterBattleRoom(`房间号: ${battleRoomId} | 等待对手加入...`);
+    document.getElementById('battleScore').textContent = `${name}: 0 分 | 等待对手...`;
     subscribeBattleRoom();
 }
 
 async function joinBattleRoom() {
-    if (!supabaseClient) {
-        alert('Supabase 未加载，请刷新');
-        return;
-    }
+    if (!supabaseClient) { alert('Supabase 未加载，请刷新'); return; }
     
     const name = document.getElementById('battlePlayerName').value.trim();
     const roomId = document.getElementById('battleRoomInput').value.trim().toUpperCase();
     
-    if (!name) {
-        alert('请输入昵称');
-        return;
-    }
-    if (!roomId) {
-        alert('请输入房间号');
-        return;
-    }
+    if (!name) { alert('请输入昵称'); return; }
+    if (!roomId) { alert('请输入房间号'); return; }
     
     battlePlayerName = name;
     battlePlayerNumber = 2;
     battleRoomId = roomId;
     battleQuestionLoaded = false;
+    battleAnswered = false;
     
     const { data, error } = await supabaseClient
         .from('battle_rooms')
@@ -918,19 +931,11 @@ async function joinBattleRoom() {
         .eq('id', roomId)
         .select();
     
-    if (error || !data || data.length === 0) {
-        alert('加入房间失败，检查房间号');
-        return;
-    }
+    if (error || !data || data.length === 0) { alert('加入房间失败，检查房间号'); return; }
     
     battleMode = data[0].mode;
-    
-    document.getElementById('battlePanel').style.display = 'none';
-    document.getElementById('battleRoomPanel').style.display = 'block';
-    document.getElementById('battleRoomInfo').textContent = `房间号: ${battleRoomId} | 对战进行中！`;
+    enterBattleRoom(`房间号: ${battleRoomId} | 对战进行中！`);
     document.getElementById('battleScore').textContent = `${data[0].player1}: ${data[0].player1_score} 分 | ${name}: 0 分`;
-    document.getElementById('battleInput').disabled = false;
-    
     subscribeBattleRoom();
     
     if (battleMode === 'race') {
@@ -942,17 +947,19 @@ async function joinBattleRoom() {
 
 async function subscribeBattleRoom() {
     if (!supabaseClient) return;
-    
-    if (battleSubscription) {
-        supabaseClient.removeChannel(battleSubscription);
-    }
+    if (battleSubscription) supabaseClient.removeChannel(battleSubscription);
     
     battleSubscription = supabaseClient
         .channel('room_' + battleRoomId)
         .on('postgres_changes', 
             { event: 'UPDATE', schema: 'public', table: 'battle_rooms', filter: 'id=eq.' + battleRoomId },
-            (payload) => {
-                handleBattleUpdate(payload.new);
+            (payload) => handleBattleUpdate(payload.new)
+        )
+        .on('postgres_changes',
+            { event: 'DELETE', schema: 'public', table: 'battle_rooms', filter: 'id=eq.' + battleRoomId },
+            () => {
+                document.getElementById('battleRoomInfo').textContent = '⚠️ 房主已解散房间';
+                document.getElementById('battleInput').disabled = true;
             }
         )
         .subscribe();
@@ -961,7 +968,6 @@ async function subscribeBattleRoom() {
 function handleBattleUpdate(roomData) {
     if (!roomData) return;
     
-    // 更新分数显示
     document.getElementById('battleScore').textContent = 
         `${roomData.player1 || '玩家1'}: ${roomData.player1_score} 分 | ${roomData.player2 || '玩家2'}: ${roomData.player2_score} 分`;
     
@@ -971,14 +977,14 @@ function handleBattleUpdate(roomData) {
         document.getElementById('battleRoomInfo').textContent = `房间号: ${battleRoomId} | 对战进行中！`;
         document.getElementById('battleInput').disabled = false;
         
-        // 竞速模式
         if (roomData.mode === 'race') {
             if (roomData.current_question && !battleQuestionLoaded) {
                 battleQuestionLoaded = true;
+                battleAnswered = false;
                 document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+                document.getElementById('battleQuestion').style.display = 'block';
                 loadBattleDistrict(roomData.current_question);
             } else if (!roomData.current_question && battlePlayerNumber === 1) {
-                // 房主出题
                 startRaceQuestion();
             }
         }
@@ -989,6 +995,14 @@ function handleBattleUpdate(roomData) {
         document.getElementById('battleInput').disabled = true;
         if (battleTimer) clearInterval(battleTimer);
     }
+}
+
+// 加载对决战地图
+function loadBattleDistrict(name) {
+    const oldMode = gameMode;
+    gameMode = 'hard';
+    loadDistrict(name);
+    gameMode = oldMode;
 }
 
 // ==================== 模式1：竞速对决 ====================
@@ -1003,12 +1017,13 @@ async function startRaceQuestion() {
     
     if (data && data.current_question) {
         battleQuestionLoaded = true;
+        battleAnswered = false;
         document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+        document.getElementById('battleQuestion').style.display = 'block';
         loadBattleDistrict(data.current_question);
         return;
     }
     
-    // 没有题目，创建新题（由房主创建）
     if (battlePlayerNumber === 1) {
         const districts = Object.keys(ADJACENCY);
         const randomDistrict = districts[Math.floor(Math.random() * districts.length)];
@@ -1019,13 +1034,15 @@ async function startRaceQuestion() {
             .eq('id', battleRoomId);
         
         battleQuestionLoaded = true;
+        battleAnswered = false;
         document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+        document.getElementById('battleQuestion').style.display = 'block';
         loadBattleDistrict(randomDistrict);
     }
 }
 
 async function submitBattleAnswer() {
-    if (!supabaseClient || !battleRoomId) return;
+    if (!supabaseClient || !battleRoomId || battleAnswered) return;
     
     const input = document.getElementById('battleInput').value.trim();
     if (!input) return;
@@ -1039,6 +1056,7 @@ async function submitBattleAnswer() {
     if (!data) return;
     
     let correct = false;
+    let correctName = '';
     
     if (data.mode === 'race') {
         if (!data.current_question) return;
@@ -1047,6 +1065,7 @@ async function submitBattleAnswer() {
             const targetBase = data.current_question.replace(/（.+?）$/, '');
             const matchBase = match.name.replace(/（.+?）$/, '');
             correct = match.name === data.current_question || matchBase === targetBase;
+            correctName = data.current_question;
         }
     } else {
         if (!battleOwnQuestion) return;
@@ -1055,23 +1074,33 @@ async function submitBattleAnswer() {
             const targetBase = battleOwnQuestion.replace(/（.+?）$/, '');
             const matchBase = match.name.replace(/（.+?）$/, '');
             correct = match.name === battleOwnQuestion || matchBase === targetBase;
+            correctName = battleOwnQuestion;
         }
     }
     
     document.getElementById('battleInput').value = '';
     
     if (correct) {
+        battleAnswered = true;
         playSound('correct');
+        document.getElementById('battleQuestion').textContent = `✅ 答对了！是 ${correctName}`;
         await addBattleScore();
         
         if (data.mode === 'race') {
-            // 清除当前题目，等下一题
             battleQuestionLoaded = false;
+            setTimeout(async () => {
+                await supabaseClient
+                    .from('battle_rooms')
+                    .update({ current_question: null })
+                    .eq('id', battleRoomId);
+                startRaceQuestion();
+            }, 1500);
         } else {
-            generateOwnQuestion();
+            setTimeout(() => generateOwnQuestion(), 1000);
         }
     } else {
         playSound('wrong');
+        document.getElementById('battleQuestion').textContent = '❌ 再试试！';
     }
 }
 
@@ -1114,7 +1143,6 @@ async function startScoreBattle() {
         .single();
     
     const duration = data?.duration || 60;
-    
     let timeLeft = duration;
     document.getElementById('battleRoomInfo').textContent = `⏱ 剩余时间: ${timeLeft}秒`;
     
@@ -1127,7 +1155,6 @@ async function startScoreBattle() {
             clearInterval(battleTimer);
             battleTimer = null;
             document.getElementById('battleInput').disabled = true;
-            
             if (battlePlayerNumber === 1) {
                 await supabaseClient
                     .from('battle_rooms')
@@ -1144,8 +1171,9 @@ function generateOwnQuestion() {
     if (!battleRoomId) return;
     const districts = Object.keys(ADJACENCY);
     battleOwnQuestion = districts[Math.floor(Math.random() * districts.length)];
-    
+    battleAnswered = false;
     document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+    document.getElementById('battleQuestion').style.display = 'block';
     loadBattleDistrict(battleOwnQuestion);
 }
 
@@ -1162,8 +1190,11 @@ async function leaveBattleRoom() {
         battleTimer = null;
     }
     
-    // 如果房主离开，删除房间
     if (battlePlayerNumber === 1 && battleRoomId && supabaseClient) {
+        await supabaseClient
+            .from('battle_rooms')
+            .update({ status: 'finished' })
+            .eq('id', battleRoomId);
         await supabaseClient
             .from('battle_rooms')
             .delete()
@@ -1174,13 +1205,19 @@ async function leaveBattleRoom() {
     battlePlayerNumber = null;
     battleOwnQuestion = null;
     battleQuestionLoaded = false;
+    battleAnswered = false;
     
-    document.getElementById('battleRoomPanel').style.display = 'none';
-    document.getElementById('battlePanel').style.display = 'block';
+    const brp = document.getElementById('battleRoomPanel');
+    brp.style.opacity = '0';
+    brp.style.transition = 'opacity 0.2s ease';
+    setTimeout(() => {
+        brp.style.display = 'none';
+        brp.style.opacity = '1';
+        document.getElementById('battlePanel').style.display = 'block';
+    }, 200);
+    
     document.getElementById('battleInput').disabled = false;
     document.getElementById('battleInput').value = '';
     
-    if (map) {
-        newRound();
-    }
+    if (map) newRound();
 }
