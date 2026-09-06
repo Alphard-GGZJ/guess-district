@@ -1218,6 +1218,9 @@ function getCitiesByProvince(province) {
 }
 
 function newRound() {
+    // 好友对决中不响应
+    if (typeof battleRoomId !== 'undefined' && battleRoomId) return;
+    
     // 检查地图是否已初始化
     if (!map) {
         console.warn('地图未初始化，跳过新回合');
@@ -1594,6 +1597,9 @@ function getDelay() {
 }
 
 function checkAnswer() {
+    // 好友对决中不响应主游戏
+    if (typeof battleRoomId !== 'undefined' && battleRoomId) return;
+    
     // 小游戏模式下不响应
     if (findDifferentMode) return;
 

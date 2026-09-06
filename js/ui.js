@@ -785,6 +785,13 @@ function skipDailyQuestion() {
     }, 500);
 }
 
+function loadBattleDistrict(name) {
+    const oldMode = gameMode;
+    gameMode = 'hard';
+    loadDistrict(name);
+    gameMode = oldMode;
+}
+
 // ==================== 好友对决 ====================
 let battleRoomId = null;
 let battlePlayerName = '';
@@ -797,8 +804,25 @@ let battleQuestionLoaded = false;
 
 function openBattlePanel() {
     playSound('click');
+    
+    dailyMode = false;
+    findDifferentMode = false;
+    coastInlandMode = false;
+    
+    if (timerMode) {
+        timerMode = false;
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        document.getElementById('btnTimer').classList.remove('active');
+        document.getElementById('timerDisplay').style.display = 'none';
+    }
+    
     document.getElementById('panel').style.display = 'none';
+    document.getElementById('dailyPanel').style.display = 'none';
     document.getElementById('miniGamesPanel').style.display = 'none';
+    
     document.getElementById('battlePanel').style.display = 'block';
 }
 
@@ -946,7 +970,7 @@ function handleBattleUpdate(roomData) {
         if (roomData.mode === 'race' && roomData.current_question && !battleQuestionLoaded) {
             battleQuestionLoaded = true;
             document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
-            loadDistrict(roomData.current_question);
+            loadBattleDistrict(roomData.current_question);
         }
     } else if (roomData.status === 'finished') {
         const winner = roomData.player1_score > roomData.player2_score ? roomData.player1 : 
@@ -970,7 +994,7 @@ async function startRaceQuestion() {
     if (data && data.current_question) {
         battleQuestionLoaded = true;
         document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
-        loadDistrict(data.current_question);
+        loadBattleDistrict(data.current_question);
         return;
     }
     
@@ -986,7 +1010,7 @@ async function startRaceQuestion() {
         
         battleQuestionLoaded = true;
         document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
-        loadDistrict(randomDistrict);
+        loadBattleDistrict(randomDistrict);
     }
 }
 
@@ -1112,7 +1136,7 @@ function generateOwnQuestion() {
     battleOwnQuestion = districts[Math.floor(Math.random() * districts.length)];
     
     document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
-    loadDistrict(battleOwnQuestion);
+    loadBattleDistrict(battleOwnQuestion);
 }
 
 async function leaveBattleRoom() {
@@ -1128,6 +1152,14 @@ async function leaveBattleRoom() {
         battleTimer = null;
     }
     
+    // 如果房主离开，删除房间
+    if (battlePlayerNumber === 1 && battleRoomId && supabaseClient) {
+        await supabaseClient
+            .from('battle_rooms')
+            .delete()
+            .eq('id', battleRoomId);
+    }
+    
     battleRoomId = null;
     battlePlayerNumber = null;
     battleOwnQuestion = null;
@@ -1137,4 +1169,8 @@ async function leaveBattleRoom() {
     document.getElementById('battlePanel').style.display = 'block';
     document.getElementById('battleInput').disabled = false;
     document.getElementById('battleInput').value = '';
+    
+    if (map) {
+        newRound();
+    }
 }
