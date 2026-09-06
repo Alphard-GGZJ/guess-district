@@ -1069,7 +1069,7 @@ async function submitBattleAnswer() {
         if (!data.current_question) return;
         const oldMode = gameMode;
         gameMode = 'hard';
-        const match = matchForMode(input);
+        const match = matchForMode(input, 'hard');
         gameMode = oldMode;
         if (match.status === 'exact') {
             const targetBase = data.current_question.replace(/（.+?）$/, '');
@@ -1081,7 +1081,7 @@ async function submitBattleAnswer() {
         if (!battleOwnQuestion) return;
         const oldMode = gameMode;
         gameMode = 'hard';
-        const match = matchForMode(input);
+        const match = matchForMode(input, 'hard');
         gameMode = oldMode;
         if (match.status === 'exact') {
             const targetBase = battleOwnQuestion.replace(/（.+?）$/, '');

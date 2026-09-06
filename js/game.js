@@ -376,14 +376,15 @@ function matchDistrict(input) {
     return { status: 'none' };
 }
 
-function matchForMode(input) {
+function matchForMode(input, forceMode) {
     let pool;
+    const mode = forceMode || gameMode;
 
     if (dailyMode) {
         pool = Object.keys(ADJACENCY);
-    } else if (gameMode === 'easy') {
+    } else if (mode === 'easy') {
         pool = provinceOfficialNames;
-    } else if (gameMode === 'normal') {
+    } else if (mode === 'normal') {
         pool = getCityPool();
     } else {
         pool = Object.keys(ADJACENCY);
