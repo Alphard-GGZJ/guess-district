@@ -800,16 +800,9 @@ function openBattlePanel() {
     
     const bp = document.getElementById('battlePanel');
     bp.style.display = 'block';
-    bp.style.setProperty('position', 'fixed', 'important');
-    bp.style.setProperty('top', '50%', 'important');
-    bp.style.setProperty('left', '50%', 'important');
-    bp.style.setProperty('transform', 'translate(-50%,-50%)', 'important');
-    bp.style.setProperty('z-index', '99999', 'important');
-    bp.style.setProperty('background', 'white', 'important');
-    bp.style.setProperty('padding', '25px', 'important');
-    bp.style.setProperty('border-radius', '16px', 'important');
-    bp.style.setProperty('box-shadow', '0 10px 30px rgba(0,0,0,0.3)', 'important');
-    bp.style.setProperty('min-width', '300px', 'important');
+    bp.classList.remove('pop-in');
+    void bp.offsetWidth;
+    bp.classList.add('pop-in');
 }
 
 function closeBattlePanel() {
@@ -915,16 +908,9 @@ function enterBattleRoom(infoText) {
     
     const brp = document.getElementById('battleRoomPanel');
     brp.style.display = 'block';
-    brp.style.setProperty('position', 'fixed', 'important');
-    brp.style.setProperty('top', '50%', 'important');
-    brp.style.setProperty('left', '50%', 'important');
-    brp.style.setProperty('transform', 'translate(-50%,-50%)', 'important');
-    brp.style.setProperty('z-index', '99999', 'important');
-    brp.style.setProperty('background', 'white', 'important');
-    brp.style.setProperty('padding', '25px', 'important');
-    brp.style.setProperty('border-radius', '16px', 'important');
-    brp.style.setProperty('box-shadow', '0 10px 30px rgba(0,0,0,0.3)', 'important');
-    brp.style.setProperty('min-width', '300px', 'important');
+    brp.classList.remove('pop-in');
+    void brp.offsetWidth;
+    brp.classList.add('pop-in');
     
     document.getElementById('battleRoomInfo').textContent = infoText;
     document.getElementById('battleInput').disabled = false;
