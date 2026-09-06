@@ -797,8 +797,20 @@ function openBattlePanel() {
     playSound('click');
     document.getElementById('panel').style.display = 'none';
     document.getElementById('miniGamesPanel').style.display = 'none';
-    document.getElementById('battlePanel').style.display = 'block';
-    document.getElementById('battlePanel').classList.add('pop-in');
+    
+    const bp = document.getElementById('battlePanel');
+    bp.style.display = 'block';
+    bp.style.position = 'fixed';
+    bp.style.top = '50%';
+    bp.style.left = '50%';
+    bp.style.transform = 'translate(-50%,-50%)';
+    bp.style.zIndex = '99999';
+    bp.style.background = 'white';
+    bp.style.padding = '25px';
+    bp.style.borderRadius = '16px';
+    bp.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
+    bp.style.minWidth = '300px';
+    bp.classList.add('pop-in');
 }
 
 function closeBattlePanel() {
@@ -901,7 +913,20 @@ async function joinBattleRoom() {
 
 function enterBattleRoom(infoText) {
     document.getElementById('battlePanel').style.display = 'none';
-    document.getElementById('battleRoomPanel').style.display = 'block';
+    
+    const brp = document.getElementById('battleRoomPanel');
+    brp.style.display = 'block';
+    brp.style.position = 'fixed';
+    brp.style.top = '50%';
+    brp.style.left = '50%';
+    brp.style.transform = 'translate(-50%,-50%)';
+    brp.style.zIndex = '99999';
+    brp.style.background = 'white';
+    brp.style.padding = '25px';
+    brp.style.borderRadius = '16px';
+    brp.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
+    brp.style.minWidth = '300px';
+    
     document.getElementById('battleRoomInfo').textContent = infoText;
     document.getElementById('battleInput').disabled = false;
 }
