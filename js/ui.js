@@ -9,6 +9,7 @@ function setMsg(text, className) {
 }
 
 function bindUI() {
+    document.getElementById('battleCollapseBtn').addEventListener('click', toggleBattleCollapse);
         document.getElementById('btnBattle').addEventListener('click', openBattlePanel);
     document.getElementById('btnBattleExit').addEventListener('click', closeBattlePanel);
     document.getElementById('btnBattleCreate').addEventListener('click', createBattleRoom);
@@ -985,19 +986,23 @@ function handleBattleUpdate(roomData) {
         document.getElementById('battleRoomInfo').textContent = `房间号: ${battleRoomId} | 对战进行中！`;
         document.getElementById('battleInput').disabled = false;
         
+                if (roomData.mode === 'race') {
+            if (roomData.current_question === null) {
+                // 有人答对了，锁定输入并提示
+                document.getElementById('battleInput').disabled = true;
+                document.getElementById('battleQuestion').textContent = '⏳ 对方已答对，等待下一题...';
+                document.getElementById('battleQuestion').style.display = 'block';
+            } else if (roomData.current_question !== battleLastQuestion) {
+                
         if (roomData.mode === 'race') {
-            if (roomData.current_question) {
-                // 题目变化就加载（不是null就加载）
-                if (!battleQuestionLoaded || battleLastQuestion !== roomData.current_question) {
-                    battleQuestionLoaded = true;
-                    battleLastQuestion = roomData.current_question;
-                    battleAnswered = false;
-                    document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
-                    document.getElementById('battleQuestion').style.display = 'block';
-                    loadBattleDistrict(roomData.current_question);
-                }
-            } else if (battlePlayerNumber === 1) {
-                startRaceQuestion();
+            if (roomData.current_question !== null && roomData.current_question !== battleLastQuestion) {
+                battleLastQuestion = roomData.current_question;
+                battleAnswered = false;
+                battleQuestionLoaded = true;
+                document.getElementById('battleQuestion').textContent = '请猜区县';
+                document.getElementById('battleQuestion').style.display = 'block';
+                document.getElementById('battleInput').disabled = false;
+                loadBattleDistrict(roomData.current_question);
             }
         }
     } else if (roomData.status === 'finished') {
@@ -1027,10 +1032,11 @@ async function startRaceQuestion() {
         .eq('id', battleRoomId)
         .single();
     
-    if (data && data.current_question) {
+    if (data && data.current_question && data.current_question !== battleLastQuestion) {
+        battleLastQuestion = data.current_question;
         battleQuestionLoaded = true;
         battleAnswered = false;
-        document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+        document.getElementById('battleQuestion').textContent = '请猜区县';
         document.getElementById('battleQuestion').style.display = 'block';
         loadBattleDistrict(data.current_question);
         return;
@@ -1047,7 +1053,7 @@ async function startRaceQuestion() {
         
         battleQuestionLoaded = true;
         battleAnswered = false;
-        document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+        document.getElementById('battleQuestion').textContent = '请猜区县';
         document.getElementById('battleQuestion').style.display = 'block';
         loadBattleDistrict(randomDistrict);
     }
@@ -1141,7 +1147,7 @@ async function addBattleScore() {
     
     await supabaseClient
         .from('battle_rooms')
-        .update({ [scoreField]: newScore })
+        .update({ [scoreField]: newScore, current_question: null })
         .eq('id', battleRoomId);
     
     if (roomData.mode === 'race' && newScore >= roomData.target_score) {
@@ -1192,7 +1198,7 @@ function generateOwnQuestion() {
     const districts = Object.keys(ADJACENCY);
     battleOwnQuestion = districts[Math.floor(Math.random() * districts.length)];
     battleAnswered = false;
-    document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+    document.getElementById('battleQuestion').textContent = '请猜区县';
     document.getElementById('battleQuestion').style.display = 'block';
     loadBattleDistrict(battleOwnQuestion);
 }
@@ -1246,4 +1252,22 @@ async function leaveBattleRoom() {
     document.getElementById('battleInput').value = '';
     
     if (map) newRound();
+}
+
+function toggleBattleCollapse() {
+    const brp = document.getElementById('battleRoomPanel');
+    const btn = document.getElementById('battleCollapseBtn');
+    
+    // 要收起的内容（除了标题和收起按钮）
+    const contents = brp.querySelectorAll('#battleRoomInfo, #battleScore, #battleQuestion, #battleInput, #battleSubmitBtn, #btnBattleLeave');
+    
+    if (brp.classList.contains('collapsed')) {
+        contents.forEach(el => el.style.display = '');
+        brp.classList.remove('collapsed');
+        btn.textContent = '收起';
+    } else {
+        contents.forEach(el => el.style.display = 'none');
+        brp.classList.add('collapsed');
+        btn.textContent = '展开';
+    }
 }
