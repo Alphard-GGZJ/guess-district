@@ -933,6 +933,7 @@ async function joinBattleRoom() {
     battleRoomId = roomId;
     battleQuestionLoaded = false;
     battleAnswered = false;
+    battleLastQuestion = null;
     
     const { data, error } = await supabaseClient
         .from('battle_rooms')
@@ -993,7 +994,7 @@ function handleBattleUpdate(roomData) {
                 document.getElementById('battleQuestion').textContent = '⏳ 对方已答对，等待下一题...';
                 document.getElementById('battleQuestion').style.display = 'block';
             } else if (roomData.current_question !== battleLastQuestion) {
-                
+
         if (roomData.mode === 'race') {
             if (roomData.current_question !== null && roomData.current_question !== battleLastQuestion) {
                 battleLastQuestion = roomData.current_question;
@@ -1016,10 +1017,24 @@ function handleBattleUpdate(roomData) {
 
 // 加载对决战地图
 function loadBattleDistrict(name) {
-    const oldMode = gameMode;
-    gameMode = 'hard';
-    loadDistrict(name);
-    gameMode = oldMode;
+    const baseName = name.replace(/（.+?）$/, '');
+    
+    function attempt(retry) {
+        ds.search(baseName, (status, result) => {
+            if (status === 'complete' && result.districtList.length > 0) {
+                const d = result.districtList.find(x => x.level === 'district') || result.districtList[0];
+                if (window.innerWidth <= 768) {
+                    drawDistrictOnCanvas(d);
+                } else {
+                    showDistrict(d);
+                }
+            } else if (retry > 0) {
+                setTimeout(() => attempt(retry - 1), 500);
+            }
+        });
+    }
+    
+    attempt(5);
 }
 
 // ==================== 模式1：竞速对决 ====================
