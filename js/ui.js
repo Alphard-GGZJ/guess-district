@@ -802,6 +802,7 @@ let battleTimer = null;
 let battleOwnQuestion = null;
 let battleQuestionLoaded = false;
 let battleAnswered = false;
+let battleLastQuestion = null;
 
 function openBattlePanel() {
     playSound('click');
@@ -985,13 +986,17 @@ function handleBattleUpdate(roomData) {
         document.getElementById('battleInput').disabled = false;
         
         if (roomData.mode === 'race') {
-            if (roomData.current_question && !battleQuestionLoaded) {
-                battleQuestionLoaded = true;
-                battleAnswered = false;
-                document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
-                document.getElementById('battleQuestion').style.display = 'block';
-                loadBattleDistrict(roomData.current_question);
-            } else if (!roomData.current_question && battlePlayerNumber === 1) {
+            if (roomData.current_question) {
+                // 题目变化就加载（不是null就加载）
+                if (!battleQuestionLoaded || battleLastQuestion !== roomData.current_question) {
+                    battleQuestionLoaded = true;
+                    battleLastQuestion = roomData.current_question;
+                    battleAnswered = false;
+                    document.getElementById('battleQuestion').textContent = '请猜区县（轮廓已显示在地图上）';
+                    document.getElementById('battleQuestion').style.display = 'block';
+                    loadBattleDistrict(roomData.current_question);
+                }
+            } else if (battlePlayerNumber === 1) {
                 startRaceQuestion();
             }
         }
@@ -1095,6 +1100,8 @@ async function submitBattleAnswer() {
     
     if (correct) {
         battleAnswered = true;
+        battleLastQuestion = null;
+    
         playSound('correct');
         document.getElementById('battleQuestion').textContent = `✅ 答对了！是 ${correctName}`;
         await addBattleScore();
