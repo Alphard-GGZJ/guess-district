@@ -668,6 +668,7 @@ function finishDailyChallenge() {
     document.getElementById('dailySubmitBtn').disabled = true;
     document.getElementById('dailyShareBtn').style.display = 'inline-block';
     document.getElementById('dailyImageBtn').style.display = 'inline-block';
+    document.getElementById('dailyReviewBtn').style.display = 'inline-block';
 }
 
 function exitDailyChallenge() {
