@@ -774,8 +774,16 @@ function skipDailyQuestion() {
     
     playSound('click');
     
-    // 记录跳过的题目（优先用题库，避免地图未加载）
-    const questionName = dailyQuestions[dailyIndex];
+    // 记录跳过的题目：优先用当前显示的题（targetDistrict）
+    // 如果地图还没加载出来，用题库中的题
+    let questionName = null;
+    if (targetDistrict && targetDistrict.name) {
+        questionName = targetDistrict.name;
+    } else if (dailyQuestions[dailyIndex]) {
+        questionName = dailyQuestions[dailyIndex];
+    }
+    
+    // 只有没答对过的题才记录
     if (questionName && !dailyWrongAnswers.includes(questionName) && !dailyCorrectAnswers.includes(questionName)) {
         dailyWrongAnswers.push(questionName);
     }
