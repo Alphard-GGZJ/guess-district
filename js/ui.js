@@ -1300,33 +1300,14 @@ async function leaveBattleRoom() {
     if (map) newRound();
 }
 
-function toggleBattleCollapse() {
-    const brp = document.getElementById('battleRoomPanel');
-    const btn = document.getElementById('battleCollapseBtn');
-    
-    if (brp.classList.contains('collapsed')) {
-        // 展开
-        brp.querySelectorAll('#battleRoomInfo, #battleScore, #battleQuestion, #battleInput, #battleSubmitBtn, #btnBattleLeave').forEach(el => {
-            el.style.display = '';
-        });
-        brp.classList.remove('collapsed');
-        btn.textContent = '收起';
-    } else {
-        // 收起
-        brp.querySelectorAll('#battleRoomInfo, #battleScore, #battleQuestion, #battleInput, #battleSubmitBtn, #btnBattleLeave').forEach(el => {
-            el.style.display = 'none';
-        });
-        brp.classList.add('collapsed');
-        btn.textContent = '展开';
-    }
-}
-
 function showDailyReview() {
     if (!dailyMode && dailyCorrectAnswers.length === 0 && dailyWrongAnswers.length === 0) return;
     
+    playSound('click');
+    
     const panel = document.createElement('div');
     panel.id = 'dailyReviewPanel';
-    panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:25px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999;max-width:80vw;max-height:70vh;overflow-y:auto;min-width:280px;';
+    panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:25px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999;max-width:80vw;max-height:70vh;overflow-y:auto;min-width:280px;animation:popIn 0.25s ease-out;';
     
     let html = '<h3 style="text-align:center;margin-bottom:15px;">📝 今日答题回顾</h3>';
     
@@ -1342,7 +1323,7 @@ function showDailyReview() {
     
     if (dailyWrongAnswers.length > 0) {
         html += '<div style="margin-bottom:15px;">';
-        html += '<div style="color:#ef4444;font-weight:bold;margin-bottom:8px;">❌ 答错/跳过 (' + dailyWrongAnswers.length + ')</div>';
+        html += '<div style="color:#ef4444;font-weight:bold;margin-bottom:8px;">⏭ 跳过 (' + dailyWrongAnswers.length + ')</div>';
         html += '<ul style="padding-left:20px;margin:0;">';
         dailyWrongAnswers.forEach(name => {
             html += '<li style="padding:3px 0;font-size:14px;color:#ef4444;">' + name + '</li>';
@@ -1350,12 +1331,25 @@ function showDailyReview() {
         html += '</ul></div>';
     }
     
-    html += '<button id="dailyReviewCloseBtn" style="display:block;width:100%;padding:10px;border:none;border-radius:8px;background:#4a6cf7;color:white;cursor:pointer;font-size:14px;">关闭</button>';
+    html += '<button id="dailyReviewCloseBtn" style="display:block;width:100%;padding:10px;border:none;border-radius:8px;background:#4a6cf7;color:white;cursor:pointer;font-size:14px;transition:all 0.2s ease;">关闭</button>';
     
     panel.innerHTML = html;
     document.body.appendChild(panel);
     
-    document.getElementById('dailyReviewCloseBtn').onclick = () => {
-        panel.remove();
+    const closeBtn = document.getElementById('dailyReviewCloseBtn');
+    closeBtn.onmouseenter = () => {
+        closeBtn.style.transform = 'scale(1.03)';
+        closeBtn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+    };
+    closeBtn.onmouseleave = () => {
+        closeBtn.style.transform = '';
+        closeBtn.style.boxShadow = '';
+    };
+    closeBtn.onclick = () => {
+        playSound('click');
+        panel.style.animation = 'none';
+        panel.style.opacity = '0';
+        panel.style.transition = 'opacity 0.2s ease';
+        setTimeout(() => panel.remove(), 200);
     };
 }

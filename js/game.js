@@ -669,6 +669,9 @@ function finishDailyChallenge() {
     document.getElementById('dailyShareBtn').style.display = 'inline-block';
     document.getElementById('dailyImageBtn').style.display = 'inline-block';
     document.getElementById('dailyReviewBtn').style.display = 'inline-block';
+    document.getElementById('dailyReviewBtn').classList.remove('pop-in');
+    void document.getElementById('dailyReviewBtn').offsetWidth;
+    document.getElementById('dailyReviewBtn').classList.add('pop-in');
 }
 
 function exitDailyChallenge() {
@@ -1660,11 +1663,6 @@ if (dailyMode) {
 setTimeout(loadDailyQuestion, getDelay());
         } else {
             playSound('wrong');
-
-            // 记录错题（只记录一次）
-            if (targetDistrict && !dailyWrongAnswers.includes(targetDistrict.name) && !dailyCorrectAnswers.includes(targetDistrict.name)) {
-                dailyWrongAnswers.push(targetDistrict.name);
-            }
 
             document.getElementById('dailyMsg').textContent = '❌ 不对，再猜！';
             document.getElementById('dailyInput').value = '';
