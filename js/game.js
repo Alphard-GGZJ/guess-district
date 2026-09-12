@@ -37,6 +37,9 @@ let dailyIndex = 0;
 let dailyScore = 0;
 let dailyCompleted = false;
 let mobileNeighborData = [];
+let dailyWrongAnswers = [];
+let dailyCorrectAnswers = [];
+
 const districtPool = Object.keys(ADJACENCY);
 
 const provinceOfficialNames = [
@@ -613,6 +616,8 @@ function startDailyChallenge() {
     dailyIndex = 0;
     dailyScore = 0;
     dailyCompleted = false;
+    dailyWrongAnswers = [];
+    dailyCorrectAnswers = [];
 
     document.getElementById('panelContent').style.display = 'none';
     document.getElementById('dailyPanel').style.display = 'block';
@@ -1644,11 +1649,21 @@ if (dailyMode) {
             dailyScoreEl.classList.add('score-bounce');
             setTimeout(() => dailyScoreEl.classList.remove('score-bounce'), 300);
 
+            // 记录答对的题
+            if (targetDistrict && !dailyCorrectAnswers.includes(targetDistrict.name)) {
+                dailyCorrectAnswers.push(targetDistrict.name);
+            }
+
             document.getElementById('dailyMsg').textContent = '✅ 正确！';
             dailyIndex++;
 setTimeout(loadDailyQuestion, getDelay());
         } else {
             playSound('wrong');
+
+            // 记录错题（只记录一次）
+            if (targetDistrict && !dailyWrongAnswers.includes(targetDistrict.name) && !dailyCorrectAnswers.includes(targetDistrict.name)) {
+                dailyWrongAnswers.push(targetDistrict.name);
+            }
 
             document.getElementById('dailyMsg').textContent = '❌ 不对，再猜！';
             document.getElementById('dailyInput').value = '';
