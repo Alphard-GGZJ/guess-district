@@ -876,7 +876,7 @@ let battleGiveUpPending = false;
 let battleGameStarted = false;
 let battleResultShown = false;
 let battleRange = 'district';
-
+let battleQuestionIndex = 0;
 // 地图缓存
 const battleDistrictCache = {};
 
@@ -1048,7 +1048,7 @@ async function createBattleRoom() {
     battleLastTotalScore = 0;
     battleGameStarted = false;
     battleResultShown = false;
-    
+    battleQuestionIndex = 0;
     const targetScore = parseInt(document.getElementById('battleTargetScore').value) || 5;
     const duration = parseInt(document.getElementById('battleDuration').value) || 60;
     
@@ -1106,7 +1106,7 @@ async function joinBattleRoom() {
     battleLastTotalScore = 0;
     battleGameStarted = false;
     battleResultShown = false;
-    
+    battleQuestionIndex = 0;
     // 先查房间是否存在
     const { data: roomCheck } = await supabaseClient
         .from('battle_rooms')
@@ -1365,12 +1365,16 @@ async function startRaceQuestion() {
     }
 }
 
-// 提交答案
 async function submitBattleAnswer() {
     if (!supabaseClient || !battleRoomId || battleAnswered) return;
     
     const input = document.getElementById('battleInput').value.trim();
     if (!input) return;
+    
+    // 立即锁定
+    battleAnswered = true;
+    document.getElementById('battleSubmitBtn').disabled = true;
+    document.getElementById('battleInput').disabled = true;
     
     const { data } = await supabaseClient
         .from('battle_rooms')
@@ -1378,30 +1382,42 @@ async function submitBattleAnswer() {
         .eq('id', battleRoomId)
         .single();
     
-    if (!data) return;
+    if (!data) {
+        battleAnswered = false;
+        document.getElementById('battleSubmitBtn').disabled = false;
+        document.getElementById('battleInput').disabled = false;
+        return;
+    }
     
     let correct = false;
     let correctName = '';
     let targetName = '';
     
     if (data.mode === 'race') {
-        if (!data.current_question) return;
+        if (!data.current_question) {
+            battleAnswered = false;
+            document.getElementById('battleSubmitBtn').disabled = false;
+            document.getElementById('battleInput').disabled = false;
+            return;
+        }
         targetName = data.current_question;
     } else {
-        if (!battleOwnQuestion) return;
+        if (!battleOwnQuestion) {
+            battleAnswered = false;
+            document.getElementById('battleSubmitBtn').disabled = false;
+            document.getElementById('battleInput').disabled = false;
+            return;
+        }
         targetName = battleOwnQuestion;
     }
     
-    // 直接比对当前答案的别名
     const targetAliases = aliasMap[targetName] || [targetName];
     const targetBase = targetName.replace(/（.+?）$/, '');
     
-    // 精确匹配别名
     if (targetAliases.includes(input)) {
         correct = true;
         correctName = targetName;
     } else {
-        // 匹配：输入 + 后缀
         const suffixes = ['区', '县', '市', '旗', '盟', '州', '林区'];
         for (const suffix of suffixes) {
             if (targetAliases.includes(input + suffix)) {
@@ -1411,7 +1427,6 @@ async function submitBattleAnswer() {
             }
         }
         
-        // 匹配：答案的 base 等于输入
         if (!correct && targetBase === input) {
             correct = true;
             correctName = targetName;
@@ -1421,11 +1436,16 @@ async function submitBattleAnswer() {
     document.getElementById('battleInput').value = '';
     
     if (correct) {
-        battleAnswered = true;
         playSound('correct');
         document.getElementById('battleQuestion').textContent = `✅ 答对了！是 ${correctName}`;
-        document.getElementById('battleInput').disabled = true;
-        document.getElementById('battleSubmitBtn').disabled = true;
+
+                // 记录复盘
+        battleHistory.push({
+            question: targetName,
+            winner: battlePlayerName,
+            time: new Date().toLocaleTimeString()
+        });
+        // 保持锁定，等待新题出现
         
         await addBattleScore();
         
@@ -1433,6 +1453,7 @@ async function submitBattleAnswer() {
             setTimeout(() => {
                 document.getElementById('battleInput').disabled = false;
                 document.getElementById('battleSubmitBtn').disabled = false;
+                battleAnswered = false;
                 generateOwnQuestion();
             }, 1000);
         }
@@ -1440,6 +1461,12 @@ async function submitBattleAnswer() {
     } else {
         playSound('wrong');
         document.getElementById('battleQuestion').textContent = '❌ 再试试！';
+        
+        // 答错解锁
+        battleAnswered = false;
+        document.getElementById('battleSubmitBtn').disabled = false;
+        document.getElementById('battleInput').disabled = false;
+        document.getElementById('battleInput').focus();
     }
 }
 
@@ -1449,6 +1476,18 @@ async function addBattleScore() {
     
     const scoreField = battlePlayerNumber === 1 ? 'player1_score' : 'player2_score';
     
+    // 用 RPC 原子递增分数
+    const { data, error } = await supabaseClient.rpc('increment_score', {
+        room_id: battleRoomId,
+        score_field: scoreField
+    });
+    
+    if (error) {
+        console.error('加分失败:', error);
+        return;
+    }
+    
+    // 检查是否到目标分
     const { data: roomData } = await supabaseClient
         .from('battle_rooms')
         .select('player1_score, player2_score, target_score, mode')
@@ -1457,17 +1496,7 @@ async function addBattleScore() {
     
     if (!roomData) return;
     
-    const newScore = (battlePlayerNumber === 1 ? roomData.player1_score : roomData.player2_score) + 1;
-    
-    const updateData = { [scoreField]: newScore, current_question: null };
-    // 答对后重置双方放弃状态
-    updateData.player1_giveup = false;
-    updateData.player2_giveup = false;
-    
-    await supabaseClient
-        .from('battle_rooms')
-        .update(updateData)
-        .eq('id', battleRoomId);
+    const newScore = battlePlayerNumber === 1 ? roomData.player1_score : roomData.player2_score;
     
     if (roomData.mode === 'race' && newScore >= roomData.target_score) {
         await supabaseClient
@@ -1516,8 +1545,11 @@ async function startScoreBattle() {
 function generateOwnQuestion() {
     if (!battleRoomId) return;
     battleOwnQuestion = getRandomBattleQuestion();
+    battleQuestionIndex++;
     battleAnswered = false;
     document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
+    document.getElementById('battleInput').disabled = false;
+    document.getElementById('battleSubmitBtn').disabled = false;
     loadBattleDistrict(battleOwnQuestion);
 }
 
@@ -1701,6 +1733,8 @@ function showBattleResult(roomData, winner) {
     };
 }
 
+let battleHistory = [];
+
 function saveBattleRecord(roomData) {
     const records = JSON.parse(localStorage.getItem('battleRecords') || '[]');
     
@@ -1718,13 +1752,15 @@ function saveBattleRecord(roomData) {
         player1: roomData.player1,
         player2: roomData.player2,
         player1Score: roomData.player1_score,
-        player2Score: roomData.player2_score
+        player2Score: roomData.player2_score,
+        history: battleHistory.slice()  // 复盘数据
     };
     
     records.unshift(record);
     if (records.length > 20) records.pop();
     
     localStorage.setItem('battleRecords', JSON.stringify(records));
+    battleHistory = [];
 }
 
 function showBattleHistory() {
@@ -1777,6 +1813,7 @@ function showBattleHistory() {
                     <span>${modeText}</span>
                     <span>${r.time}</span>
                 </div>
+                ${r.history && r.history.length > 0 ? `<button onclick="showBattleReplay('${r.roomId}')" style="margin-top:6px;padding:4px 8px;font-size:11px;background:#4a6cf7;color:white;border:none;border-radius:4px;cursor:pointer;">📋 复盘</button>` : ''}
             </div>`;
         });
     }
@@ -1801,6 +1838,18 @@ function showBattleHistory() {
 }
 
 function getRandomBattleQuestion() {
+    if (battleMode === 'score') {
+        const pool = battleRange === 'city' 
+            ? getCityPool() 
+            : Object.keys(ADJACENCY);
+        
+        // 用 mulberry32 伪随机算法，质量更好
+        const seed = mulberry32(hashString(battleRoomId) + battleQuestionIndex);
+        const index = Math.floor(seed() * pool.length);
+        
+        return pool[index];
+    }
+    
     if (battleRange === 'city') {
         const cities = getCityPool();
         return cities[Math.floor(Math.random() * cities.length)];
@@ -1808,4 +1857,54 @@ function getRandomBattleQuestion() {
         const districts = Object.keys(ADJACENCY);
         return districts[Math.floor(Math.random() * districts.length)];
     }
+}
+
+function hashString(str) {
+    let hash = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+        hash ^= str.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+// mulberry32 伪随机数生成器
+function mulberry32(a) {
+    return function() {
+        a |= 0;
+        a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+}
+
+function showBattleReplay(roomId) {
+    const records = JSON.parse(localStorage.getItem('battleRecords') || '[]');
+    const record = records.find(r => r.roomId === roomId);
+    if (!record || !record.history) return;
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'replayOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:99998;';
+    document.body.appendChild(overlay);
+    
+    const panel = document.createElement('div');
+    panel.style.cssText = 'position:fixed !important;top:50% !important;left:50% !important;transform:translate(-50%,-50%) !important;background:white;padding:25px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999 !important;max-width:80vw;max-height:70vh;overflow-y:auto;min-width:300px;';
+    
+    let html = '<h3 style="text-align:center;margin-bottom:15px;">📋 对局复盘</h3>';
+    html += '<div style="font-size:12px;color:#666;margin-bottom:10px;">' + record.player1 + ' vs ' + record.player2 + '</div>';
+    
+    record.history.forEach((h, i) => {
+        html += `<div style="padding:8px;border-bottom:1px solid #eee;font-size:13px;">
+            <span style="color:#999;">第${i+1}题：</span>
+            <span style="font-weight:bold;">${h.question}</span>
+            <span style="float:right;color:#10b981;">${h.winner} 答对</span>
+        </div>`;
+    });
+    
+    html += '<button onclick="document.getElementById(\'replayOverlay\').remove(); this.parentElement.remove();" style="display:block;width:100%;margin-top:15px;padding:10px;border:none;border-radius:8px;background:#4a6cf7;color:white;cursor:pointer;">关闭</button>';
+    
+    panel.innerHTML = html;
+    document.body.appendChild(panel);
 }
