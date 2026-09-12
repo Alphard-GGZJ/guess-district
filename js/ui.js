@@ -875,6 +875,7 @@ let battleLastTotalScore = 0;
 let battleGiveUpPending = false;
 let battleGameStarted = false;
 let battleResultShown = false;
+let battleRange = 'district';
 
 // 地图缓存
 const battleDistrictCache = {};
@@ -895,7 +896,12 @@ function loadBattleDistrict(name) {
     function attempt() {
         ds.search(baseName, (status, result) => {
             if (status === 'complete' && result.districtList && result.districtList.length > 0) {
-                const d = result.districtList.find(x => x.level === 'district') || result.districtList[0];
+                let d;
+                if (battleRange === 'city') {
+                    d = result.districtList.find(x => x.level === 'city') || result.districtList[0];
+                } else {
+                    d = result.districtList.find(x => x.level === 'district') || result.districtList[0];
+                }
                 if (d && d.boundaries && d.boundaries.length > 0) {
                     battleDistrictCache[baseName] = d;
                     displayBattleDistrict(d);
@@ -1006,12 +1012,13 @@ function enterBattleRoom(infoText) {
     brp.style.setProperty('padding', '12px', 'important');
     brp.style.setProperty('border-radius', '10px', 'important');
     brp.style.setProperty('box-shadow', '0 4px 15px rgba(0,0,0,0.2)', 'important');
-        // 显示模式信息
+    // 显示模式信息
     const modeText = battleMode === 'race' ? '🏁 竞速' : '📊 竞分';
     const targetText = battleMode === 'race' 
         ? `目标 ${document.getElementById('battleTargetScore').value} 分` 
         : `限时 ${document.getElementById('battleDuration').value} 秒`;
-    infoText = `${infoText}<br><span style="font-size:12px;color:#666;">${modeText} · ${targetText}</span>`;
+    const rangeText = battleRange === 'city' ? '地级市' : '县级';
+    infoText = `${infoText}<br><span style="font-size:12px;color:#666;">${modeText} · ${targetText} · ${rangeText}</span>`;
     document.getElementById('battleRoomInfo').innerHTML = infoText;
     document.getElementById('battleInput').disabled = false;
     document.getElementById('battleInput').value = '';
@@ -1033,6 +1040,7 @@ async function createBattleRoom() {
     battlePlayerNumber = 1;
     battleRoomId = generateRoomId();
     battleMode = document.getElementById('battleModeSelect').value;
+    battleRange = document.getElementById('battleRangeSelect').value;
     battleQuestionLoaded = false;
     battleAnswered = false;
     battleLastQuestion = null;
@@ -1051,6 +1059,7 @@ async function createBattleRoom() {
             mode: battleMode,
             target_score: targetScore,
             duration: duration,
+            range_type: battleRange,
             status: 'waiting',
             player1: name,
             player1_score: 0,
@@ -1124,6 +1133,7 @@ async function joinBattleRoom() {
     if (error || !data || data.length === 0) { alert('加入房间失败，检查房间号'); return; }
     
     battleMode = data[0].mode;
+    battleRange = data[0].range_type || 'district';
     enterBattleRoom(`房间号: ${battleRoomId} | 对战进行中！`);
     document.getElementById('battleScore').textContent = `${data[0].player1}: ${data[0].player1_score} 分 | ${name}: 0 分`;
     subscribeBattleRoom();
@@ -1193,7 +1203,8 @@ function handleBattleUpdate(roomData) {
     const targetText = roomData.mode === 'race' 
         ? `目标 ${roomData.target_score} 分` 
         : `限时 ${roomData.duration} 秒`;
-    const modeInfo = `<span style="font-size:12px;color:#666;">${modeText} · ${targetText}</span>`;
+    const rangeText = (roomData.range_type === 'city' || battleRange === 'city') ? '地级市' : '县级';
+    const modeInfo = `<span style="font-size:12px;color:#666;">${modeText} · ${targetText} · ${rangeText}</span>`;
     
         // 根据模式修改按钮文字
     if (roomData.mode === 'score') {
@@ -1279,7 +1290,7 @@ function handleBattleUpdate(roomData) {
                 battleGameStarted = true;
                 battleAnswered = false;
                 battleQuestionLoaded = true;
-                document.getElementById('battleQuestion').textContent = '请猜区县';
+                document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
                 document.getElementById('battleInput').disabled = false;
                 document.getElementById('battleGiveUpBtn').disabled = false;
                 if (roomData.current_question !== battleCurrentDisplayed) {
@@ -1316,7 +1327,7 @@ async function startRaceQuestion() {
         battleGameStarted = true;
         battleQuestionLoaded = true;
         battleAnswered = false;
-        document.getElementById('battleQuestion').textContent = '请猜区县';
+        document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
         document.getElementById('battleInput').disabled = false;
         document.getElementById('battleGiveUpBtn').disabled = false;
         if (data.current_question !== battleCurrentDisplayed) {
@@ -1327,14 +1338,13 @@ async function startRaceQuestion() {
     
     // 没有题目，房主创建
     if (battlePlayerNumber === 1 && (!data || !data.current_question)) {
-        const districts = Object.keys(ADJACENCY);
-        const randomDistrict = districts[Math.floor(Math.random() * districts.length)];
+        const randomDistrict = getRandomBattleQuestion();
         
         battleLastQuestion = randomDistrict;
         battleGameStarted = true;
         battleQuestionLoaded = true;
         battleAnswered = false;
-        document.getElementById('battleQuestion').textContent = '请猜区县';
+        document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
         document.getElementById('battleInput').disabled = false;
         document.getElementById('battleGiveUpBtn').disabled = false;
         loadBattleDistrict(randomDistrict);
@@ -1377,12 +1387,30 @@ async function submitBattleAnswer() {
         targetName = battleOwnQuestion;
     }
     
-    const match = matchForMode(input, 'hard');
-    if (match.status === 'exact') {
-        const targetBase = targetName.replace(/（.+?）$/, '');
-        const matchBase = match.name.replace(/（.+?）$/, '');
-        correct = match.name === targetName || matchBase === targetBase;
-        if (correct) correctName = targetName;
+    // 直接比对当前答案的别名
+    const targetAliases = aliasMap[targetName] || [targetName];
+    const targetBase = targetName.replace(/（.+?）$/, '');
+    
+    // 精确匹配别名
+    if (targetAliases.includes(input)) {
+        correct = true;
+        correctName = targetName;
+    } else {
+        // 匹配：输入 + 后缀
+        const suffixes = ['区', '县', '市', '旗', '盟', '州', '林区'];
+        for (const suffix of suffixes) {
+            if (targetAliases.includes(input + suffix)) {
+                correct = true;
+                correctName = targetName;
+                break;
+            }
+        }
+        
+        // 匹配：答案的 base 等于输入
+        if (!correct && targetBase === input) {
+            correct = true;
+            correctName = targetName;
+        }
     }
     
     document.getElementById('battleInput').value = '';
@@ -1454,8 +1482,9 @@ async function startScoreBattle() {
     if (battleTimer) clearInterval(battleTimer);
     battleTimer = setInterval(async () => {
         timeLeft--;
-        document.getElementById('battleRoomInfo').innerHTML = `⏱ 剩余时间: ${timeLeft}秒<br><span style="font-size:12px;color:#666;">📊 竞分 · 限时 ${duration} 秒</span>`;
-        
+        const rangeText = battleRange === 'city' ? '地级市' : '县级';
+        document.getElementById('battleRoomInfo').innerHTML = `⏱ 剩余时间: ${timeLeft}秒<br><span style="font-size:12px;color:#666;">📊 竞分 · 限时 ${duration} 秒 · ${rangeText}</span>`;
+
         if (timeLeft <= 0) {
             clearInterval(battleTimer);
             battleTimer = null;
@@ -1474,10 +1503,9 @@ async function startScoreBattle() {
 
 function generateOwnQuestion() {
     if (!battleRoomId) return;
-    const districts = Object.keys(ADJACENCY);
-    battleOwnQuestion = districts[Math.floor(Math.random() * districts.length)];
+    battleOwnQuestion = getRandomBattleQuestion();
     battleAnswered = false;
-    document.getElementById('battleQuestion').textContent = '请猜区县';
+    document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
     loadBattleDistrict(battleOwnQuestion);
 }
 
@@ -1674,6 +1702,7 @@ function saveBattleRecord(roomData) {
         mode: roomData.mode,
         targetScore: roomData.target_score,
         duration: roomData.duration,
+        rangeType: roomData.range_type || 'district',
         player1: roomData.player1,
         player2: roomData.player2,
         player1Score: roomData.player1_score,
@@ -1718,9 +1747,10 @@ function showBattleHistory() {
                 resultColor = '#f59e0b';
             }
             
+            const rangeText = r.rangeType === 'city' ? '地级市' : '县级';
             const modeText = r.mode === 'race' 
-                ? `🏁 竞速 · 目标 ${r.targetScore} 分` 
-                : `📊 竞分 · 限时 ${r.duration} 秒`;
+                ? `🏁 竞速 · 目标 ${r.targetScore} 分 · ${rangeText}` 
+                : `📊 竞分 · 限时 ${r.duration} 秒 · ${rangeText}`;
             
             html += `<div style="padding:10px;border-bottom:1px solid #eee;">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -1756,4 +1786,14 @@ function showBattleHistory() {
             overlay.remove();
         }, 300);
     };
+}
+
+function getRandomBattleQuestion() {
+    if (battleRange === 'city') {
+        const cities = getCityPool();
+        return cities[Math.floor(Math.random() * cities.length)];
+    } else {
+        const districts = Object.keys(ADJACENCY);
+        return districts[Math.floor(Math.random() * districts.length)];
+    }
 }
