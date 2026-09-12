@@ -766,16 +766,21 @@ function getCityCodeMap() {
 
 let skipDailyLock = false;
 
+let lastSkipTime = 0;
+
 function skipDailyQuestion() {
     if (!dailyMode || dailyCompleted) return;
     
+    // 距离上次跳过至少 1500ms
+    const now = Date.now();
+    if (now - lastSkipTime < 1500) return;
+    
     if (skipDailyLock) return;
     skipDailyLock = true;
+    lastSkipTime = now;
     
     playSound('click');
     
-    // 记录跳过的题目：优先用当前显示的题（targetDistrict）
-    // 如果地图还没加载出来，用题库中的题
     let questionName = null;
     if (targetDistrict && targetDistrict.name) {
         questionName = targetDistrict.name;
@@ -783,7 +788,6 @@ function skipDailyQuestion() {
         questionName = dailyQuestions[dailyIndex];
     }
     
-    // 只有没答对过的题才记录
     if (questionName && !dailyWrongAnswers.includes(questionName) && !dailyCorrectAnswers.includes(questionName)) {
         dailyWrongAnswers.push(questionName);
     }
@@ -797,7 +801,7 @@ function skipDailyQuestion() {
         skipDailyLock = false;
         document.getElementById('dailySkipBtn').disabled = false;
         loadDailyQuestion();
-    }, 500);
+    }, 1500);
 }
 
 const battleDistrictCache = {};
@@ -1315,7 +1319,7 @@ function showDailyReview() {
     
     const panel = document.createElement('div');
     panel.id = 'dailyReviewPanel';
-    panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:25px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999;max-width:80vw;max-height:70vh;overflow-y:auto;min-width:280px;animation:popIn 0.25s ease-out;';
+    panel.style.cssText = 'position:fixed !important;top:50% !important;left:50% !important;transform:translate(-50%,-50%) !important;background:white;padding:25px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999 !important;max-width:80vw;max-height:70vh;overflow-y:auto;min-width:280px;opacity:0;transition:opacity 0.3s ease;';
     
     let html = '<h3 style="text-align:center;margin-bottom:15px;">📝 今日答题回顾</h3>';
     
@@ -1343,7 +1347,9 @@ function showDailyReview() {
     
     panel.innerHTML = html;
     document.body.appendChild(panel);
-    
+        setTimeout(() => {
+        panel.style.opacity = '1';
+    }, 10);
     const closeBtn = document.getElementById('dailyReviewCloseBtn');
     closeBtn.onmouseenter = () => {
         closeBtn.style.transform = 'scale(1.03)';
