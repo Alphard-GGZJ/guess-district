@@ -1290,8 +1290,11 @@ function handleBattleUpdate(roomData) {
                 battleGameStarted = true;
                 battleAnswered = false;
                 battleQuestionLoaded = true;
-                document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
+                    document.getElementById('battleInput').disabled = false;
+    document.getElementById('battleSubmitBtn').disabled = false;
+                document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
                 document.getElementById('battleInput').disabled = false;
+                document.getElementById('battleSubmitBtn').disabled = false;
                 document.getElementById('battleGiveUpBtn').disabled = false;
                 if (roomData.current_question !== battleCurrentDisplayed) {
                     loadBattleDistrict(roomData.current_question);
@@ -1329,6 +1332,7 @@ async function startRaceQuestion() {
         battleAnswered = false;
         document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
         document.getElementById('battleInput').disabled = false;
+        document.getElementById('battleSubmitBtn').disabled = false;
         document.getElementById('battleGiveUpBtn').disabled = false;
         if (data.current_question !== battleCurrentDisplayed) {
             loadBattleDistrict(data.current_question);
@@ -1346,6 +1350,7 @@ async function startRaceQuestion() {
         battleAnswered = false;
         document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
         document.getElementById('battleInput').disabled = false;
+        document.getElementById('battleSubmitBtn').disabled = false;
         document.getElementById('battleGiveUpBtn').disabled = false;
         loadBattleDistrict(randomDistrict);
         
@@ -1419,12 +1424,19 @@ async function submitBattleAnswer() {
         battleAnswered = true;
         playSound('correct');
         document.getElementById('battleQuestion').textContent = `✅ 答对了！是 ${correctName}`;
+        document.getElementById('battleInput').disabled = true;
+        document.getElementById('battleSubmitBtn').disabled = true;
         
         await addBattleScore();
         
         if (data.mode === 'score') {
-            setTimeout(() => generateOwnQuestion(), 1000);
+            setTimeout(() => {
+                document.getElementById('battleInput').disabled = false;
+                document.getElementById('battleSubmitBtn').disabled = false;
+                generateOwnQuestion();
+            }, 1000);
         }
+        // 竞速模式：等待 handleBattleUpdate 出新题，会自动恢复
     } else {
         playSound('wrong');
         document.getElementById('battleQuestion').textContent = '❌ 再试试！';
