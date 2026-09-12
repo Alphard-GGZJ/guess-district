@@ -774,9 +774,10 @@ function skipDailyQuestion() {
     
     playSound('click');
     
-    // 记录跳过的题目
-    if (targetDistrict && !dailyWrongAnswers.includes(targetDistrict.name) && !dailyCorrectAnswers.includes(targetDistrict.name)) {
-        dailyWrongAnswers.push(targetDistrict.name);
+    // 记录跳过的题目（优先用题库，避免地图未加载）
+    const questionName = dailyQuestions[dailyIndex];
+    if (questionName && !dailyWrongAnswers.includes(questionName) && !dailyCorrectAnswers.includes(questionName)) {
+        dailyWrongAnswers.push(questionName);
     }
     
     document.getElementById('dailySkipBtn').disabled = true;
