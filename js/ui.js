@@ -1361,3 +1361,22 @@ function showDailyReview() {
         setTimeout(() => panel.remove(), 200);
     };
 }
+
+function toggleBattleCollapse() {
+    const brp = document.getElementById('battleRoomPanel');
+    const btn = document.getElementById('battleCollapseBtn');
+    
+    if (brp.classList.contains('collapsed')) {
+        brp.querySelectorAll('#battleRoomInfo, #battleScore, #battleQuestion, #battleInput, #battleSubmitBtn, #btnBattleLeave').forEach(el => {
+            el.style.display = '';
+        });
+        brp.classList.remove('collapsed');
+        btn.textContent = '收起';
+    } else {
+        brp.querySelectorAll('#battleRoomInfo, #battleScore, #battleQuestion, #battleInput, #battleSubmitBtn, #btnBattleLeave').forEach(el => {
+            el.style.display = 'none';
+        });
+        brp.classList.add('collapsed');
+        btn.textContent = '展开';
+    }
+}
