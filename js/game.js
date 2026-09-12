@@ -648,6 +648,13 @@ function loadDailyQuestion() {
 }
 
 function finishDailyChallenge() {
+    // 补全所有没记录的题
+    dailyQuestions.forEach(name => {
+        if (!dailyCorrectAnswers.includes(name) && !dailyWrongAnswers.includes(name)) {
+            dailyWrongAnswers.push(name);
+        }
+    });
+    
     playSound('complete');
     document.getElementById('dailyPanel').classList.add('pop-in');
     dailyCompleted = true;
@@ -1147,45 +1154,57 @@ function loadDistrict(name) {
     const baseName = bm ? name.replace(/（.+?）$/, '') : name;
     const parentName = bm ? bm[1] : null;
 
-    ds.search(baseName, (status, result) => {
-        if (tl !== loadId) return;
+    function searchWithRetry(retryCount) {
+        ds.search(baseName, (status, result) => {
+            if (tl !== loadId) return;
 
-        if (status !== 'complete' || result.districtList.length === 0) {
-            setMsg('加载失败，换一个', 'wrong');
-            return;
-        }
+            if (status !== 'complete' || result.districtList.length === 0) {
+                if (retryCount > 0) {
+                    setTimeout(() => searchWithRetry(retryCount - 1), 500);
+                    return;
+                }
+                setMsg('加载失败，换一个', 'wrong');
+                return;
+            }
 
-        let d;
+            let d;
 
-        if (parentName) {
-            d = result.districtList.find(x => {
-                if (x.level !== 'district') return false;
-                const city = getCityName(x.adcode);
-                return city.includes(parentName) || parentName.includes(city);
-            });
-        }
+            if (parentName) {
+                d = result.districtList.find(x => {
+                    if (x.level !== 'district') return false;
+                    const city = getCityName(x.adcode);
+                    return city.includes(parentName) || parentName.includes(city);
+                });
+            }
 
-        if (!d) {
-            d = result.districtList.find(x => x.name === baseName && x.level === 'district');
-        }
+            if (!d) {
+                d = result.districtList.find(x => x.name === baseName && x.level === 'district');
+            }
 
-        if (!d) {
-            d = result.districtList.find(x => x.level === 'district');
-        }
+            if (!d) {
+                d = result.districtList.find(x => x.level === 'district');
+            }
 
-        if (!d) {
-            newRound();
-            return;
-        }
+            if (!d) {
+                if (retryCount > 0) {
+                    setTimeout(() => searchWithRetry(retryCount - 1), 500);
+                    return;
+                }
+                newRound();
+                return;
+            }
 
-        showDistrict(d);
+            showDistrict(d);
 
-        if (gameMode === 'classic' && !dailyMode) {
-            setTimeout(() => {
-                loadNeighborDistricts(d.adcode);
-            }, 200);
-        }
-    });
+            if (gameMode === 'classic' && !dailyMode) {
+                setTimeout(() => {
+                    loadNeighborDistricts(d.adcode);
+                }, 200);
+            }
+        });
+    }
+
+    searchWithRetry(3);
 }
 
 function getCitiesByProvince(province) {
