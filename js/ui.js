@@ -795,6 +795,51 @@ function skipDailyQuestion() {
     }, 1500);
 }
 
+function showDailyReview() {
+    if (!dailyMode && dailyCorrectAnswers.length === 0 && dailyWrongAnswers.length === 0) return;
+    
+    playSound('click');
+    
+    const panel = document.createElement('div');
+    panel.id = 'dailyReviewPanel';
+    panel.style.cssText = 'position:fixed !important;top:50% !important;left:50% !important;transform:translate(-50%,-50%) !important;background:white;padding:25px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999 !important;max-width:80vw;max-height:70vh;overflow-y:auto;min-width:280px;opacity:0;transition:opacity 0.3s ease;';
+    
+    let html = '<h3 style="text-align:center;margin-bottom:15px;">📝 今日答题回顾</h3>';
+    
+    if (dailyCorrectAnswers.length > 0) {
+        html += '<div style="margin-bottom:15px;">';
+        html += '<div style="color:#10b981;font-weight:bold;margin-bottom:8px;">✅ 答对 (' + dailyCorrectAnswers.length + ')</div>';
+        html += '<ul style="padding-left:20px;margin:0;">';
+        dailyCorrectAnswers.forEach(name => {
+            html += '<li style="padding:3px 0;font-size:14px;color:#10b981;">' + name + '</li>';
+        });
+        html += '</ul></div>';
+    }
+    
+    if (dailyWrongAnswers.length > 0) {
+        html += '<div style="margin-bottom:15px;">';
+        html += '<div style="color:#ef4444;font-weight:bold;margin-bottom:8px;">⏭ 跳过 (' + dailyWrongAnswers.length + ')</div>';
+        html += '<ul style="padding-left:20px;margin:0;">';
+        dailyWrongAnswers.forEach(name => {
+            html += '<li style="padding:3px 0;font-size:14px;color:#ef4444;">' + name + '</li>';
+        });
+        html += '</ul></div>';
+    }
+    
+    html += '<button id="dailyReviewCloseBtn" style="display:block;width:100%;padding:10px;border:none;border-radius:8px;background:#4a6cf7;color:white;cursor:pointer;font-size:14px;">关闭</button>';
+    
+    panel.innerHTML = html;
+    document.body.appendChild(panel);
+    
+    setTimeout(() => { panel.style.opacity = '1'; }, 10);
+    
+    document.getElementById('dailyReviewCloseBtn').onclick = () => {
+        playSound('click');
+        panel.style.opacity = '0';
+        setTimeout(() => panel.remove(), 300);
+    };
+}
+
 // ==================== 好友对决 ====================
 let battleRoomId = null;
 let battlePlayerName = '';
