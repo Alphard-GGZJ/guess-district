@@ -795,41 +795,6 @@ function skipDailyQuestion() {
     }, 1500);
 }
 
-const battleDistrictCache = {};
-
-function loadBattleDistrict(name) {
-    const baseName = name.replace(/（.+?）$/, '');
-    
-    // 有缓存直接用
-    if (battleDistrictCache[baseName]) {
-        const d = battleDistrictCache[baseName];
-        if (window.innerWidth <= 768) {
-            drawDistrictOnCanvas(d);
-        } else {
-            showDistrict(d);
-        }
-        return;
-    }
-    
-    function attempt(retry) {
-        ds.search(baseName, (status, result) => {
-            if (status === 'complete' && result.districtList.length > 0) {
-                const d = result.districtList.find(x => x.level === 'district') || result.districtList[0];
-                battleDistrictCache[baseName] = d;
-                if (window.innerWidth <= 768) {
-                    drawDistrictOnCanvas(d);
-                } else {
-                    showDistrict(d);
-                }
-            } else if (retry > 0) {
-                setTimeout(() => attempt(retry - 1), 300);
-            }
-        });
-    }
-    
-    attempt(5);
-}
-
 // ==================== 好友对决 ====================
 let battleRoomId = null;
 let battlePlayerName = '';
