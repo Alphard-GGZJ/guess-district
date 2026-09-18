@@ -1055,11 +1055,11 @@ battleSubmitLock = false;
     battleResultShown = false;
     battleQuestionIndex = 0;
     battleHistory = [];
-    window._battleReadySoundPlayed = false;
     battleCurrentDisplayed = null;
     battleOwnQuestion = null;
     battleAnswered = false;
     battleSubmitLock = false;
+    window._battleReadySoundPlayed = false;
     const targetScore = parseInt(document.getElementById('battleTargetScore').value) || 5;
     const duration = parseInt(document.getElementById('battleDuration').value) || 60;
     
@@ -1208,7 +1208,6 @@ async function subscribeBattleRoom() {
 // 处理房间更新
 function handleBattleUpdate(roomData) {
     if (!roomData) return;
-    // 服务器 correct_log 权威，直接覆盖本地
     if (roomData.correct_log && Array.isArray(roomData.correct_log)) {
         battleHistory = roomData.correct_log.slice();
     }
@@ -1290,37 +1289,35 @@ function handleBattleUpdate(roomData) {
         // ==================== 竞速模式：题目同步 ====================
         if (roomData.mode === 'race') {
             const totalScore = (roomData.player1_score || 0) + (roomData.player2_score || 0);
-            const scoreIncreased = totalScore > battleLastTotalScore;
-            
-            if (scoreIncreased) {
+            if (totalScore > battleLastTotalScore) {
                 battleLastTotalScore = totalScore;
             }
             
             if (roomData.current_question === null) {
-                if (battlePlayerNumber === 1) {
+                // 题目已清空 → 房主出下一题
+                if (battlePlayerNumber === 1 && battleLastQuestion !== null) {
                     document.getElementById('battleInput').disabled = true;
                     document.getElementById('battleQuestion').textContent = '⏳ 等待下一题...';
                     battleGameStarted = false;
                     battleLastQuestion = null;
                     setTimeout(() => startRaceQuestion(), 800);
-                } else {
+                } else if (battlePlayerNumber !== 1) {
                     document.getElementById('battleInput').disabled = true;
                     document.getElementById('battleQuestion').textContent = '⏳ 对方已答对，等待下一题...';
                 }
-            } else if (roomData.current_question) {
+            } else if (roomData.current_question && roomData.current_question !== battleCurrentDisplayed) {
+                // 题目变化 → 双方都加载新题
                 battleLastQuestion = roomData.current_question;
                 battleGameStarted = true;
                 battleQuestionLoaded = true;
-                if (roomData.current_question !== battleCurrentDisplayed) {
-                    battleAnswered = false;
-                    battleSubmitLock = false;
-                    document.getElementById('battleInput').value = '';
-                    document.getElementById('battleInput').disabled = false;
-                    document.getElementById('battleSubmitBtn').disabled = false;
-                    document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
-                    document.getElementById('battleGiveUpBtn').disabled = false;
-                    loadBattleDistrict(roomData.current_question);
-                }
+                battleAnswered = false;
+                battleSubmitLock = false;
+                document.getElementById('battleInput').value = '';
+                document.getElementById('battleInput').disabled = false;
+                document.getElementById('battleSubmitBtn').disabled = false;
+                document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
+                document.getElementById('battleGiveUpBtn').disabled = false;
+                loadBattleDistrict(roomData.current_question);
             }
         }
 
@@ -1383,7 +1380,6 @@ battleSubmitLock = false;
         battleQuestionLoaded = true;
         battleAnswered = false;
 battleSubmitLock = false;
-        document.getElementById('battleInput').value = '';
         document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
         document.getElementById('battleInput').disabled = false;
         document.getElementById('battleSubmitBtn').disabled = false;
@@ -1482,7 +1478,7 @@ battleSubmitLock = false;
         playSound('correct');
         document.getElementById('battleQuestion').textContent = `✅ 答对了！是 ${correctName}`;
 
-        // 写入服务器 correct_log（原子追加，不会覆盖）
+        // 写入服务器 correct_log（双方共享）
         const record = {
             question: targetName,
             player: battlePlayerName,
@@ -1490,15 +1486,18 @@ battleSubmitLock = false;
             time: new Date().toLocaleTimeString()
         };
         try {
-            const { error } = await supabaseClient.rpc('append_correct_log', {
-                room_id: battleRoomId,
-                log_entry: record
-            });
-            if (error) {
-                console.error('append_correct_log 失败:', error);
-            }
+            const { data: room } = await supabaseClient
+                .from('battle_rooms')
+                .select('correct_log')
+                .eq('id', battleRoomId)
+                .single();
+            const log = (room?.correct_log || []).concat([record]);
+            await supabaseClient
+                .from('battle_rooms')
+                .update({ correct_log: log })
+                .eq('id', battleRoomId);
         } catch (e) {
-            console.error('写 correct_log 异常:', e);
+            console.error('写 correct_log 失败', e);
         }
 
         // 本地也记一份（用于复盘兜底）
@@ -1514,7 +1513,7 @@ battleSubmitLock = false;
                 generateOwnQuestion();
             }, 800);
         } else {
-            // 竞速：清空服务器题目
+            // 竞速：清空服务器题目（去掉乐观锁条件，谁先答谁清）
             await supabaseClient
                 .from('battle_rooms')
                 .update({ current_question: null })
@@ -1654,7 +1653,6 @@ async function leaveBattleRoom() {
     
     battleRoomId = null;
     battlePlayerNumber = null;
-    window._battleReadySoundPlayed = false;
     battleOwnQuestion = null;
     battleQuestionLoaded = false;
     battleAnswered = false;
@@ -1815,13 +1813,13 @@ const isWinner = !isDraw && (
 
 function saveBattleRecord(roomData) {
     const records = JSON.parse(localStorage.getItem('battleRecords') || '[]');
-    
+
     const exists = records.find(r => r.roomId === battleRoomId);
     if (exists) {
         battleHistory = [];
         return;
     }
-    
+
     const record = {
         time: new Date().toLocaleString(),
         roomId: battleRoomId,
@@ -1836,10 +1834,10 @@ function saveBattleRecord(roomData) {
         winner: roomData.winner || null,
         history: battleHistory.slice()
     };
-    
+
     records.unshift(record);
     if (records.length > 20) records.pop();
-    
+
     localStorage.setItem('battleRecords', JSON.stringify(records));
     battleHistory = [];
 }
@@ -1923,7 +1921,6 @@ function getRandomBattleQuestion() {
         ? getCityPool()
         : Object.keys(ADJACENCY);
 
-    // 纯种子出题：同 questionIndex → 同 seed → 同题
     const seed = mulberry32(hashString(
         battleRoomId + '_q_' + battleQuestionIndex
     ));
