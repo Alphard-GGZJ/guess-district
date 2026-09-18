@@ -877,6 +877,10 @@ let battleGameStarted = false;
 let battleResultShown = false;
 let battleRange = 'district';
 let battleQuestionIndex = 0;
+let battleHistory = [];
+let battleSubmitLock = false;
+let battleLastSubmitTime = 0;
+let battleCurrentQuestionId = null;
 // 地图缓存
 const battleDistrictCache = {};
 
@@ -1043,12 +1047,18 @@ async function createBattleRoom() {
     battleRange = document.getElementById('battleRangeSelect').value;
     battleQuestionLoaded = false;
     battleAnswered = false;
+battleSubmitLock = false;
     battleLastQuestion = null;
     battleCurrentDisplayed = null;
     battleLastTotalScore = 0;
     battleGameStarted = false;
     battleResultShown = false;
     battleQuestionIndex = 0;
+    battleHistory = [];
+    battleCurrentDisplayed = null;
+    battleOwnQuestion = null;
+    battleAnswered = false;
+    battleSubmitLock = false;
     const targetScore = parseInt(document.getElementById('battleTargetScore').value) || 5;
     const duration = parseInt(document.getElementById('battleDuration').value) || 60;
     
@@ -1101,12 +1111,18 @@ async function joinBattleRoom() {
     battleRoomId = roomId;
     battleQuestionLoaded = false;
     battleAnswered = false;
+battleSubmitLock = false;
     battleLastQuestion = null;
     battleCurrentDisplayed = null;
     battleLastTotalScore = 0;
     battleGameStarted = false;
     battleResultShown = false;
     battleQuestionIndex = 0;
+    battleHistory = [];
+    battleCurrentDisplayed = null;
+    battleOwnQuestion = null;
+    battleAnswered = false;
+    battleSubmitLock = false;
     // 先查房间是否存在
     const { data: roomCheck } = await supabaseClient
         .from('battle_rooms')
@@ -1191,7 +1207,10 @@ async function subscribeBattleRoom() {
 // 处理房间更新
 function handleBattleUpdate(roomData) {
     if (!roomData) return;
-    
+    // 同步服务器 correct_log 到本地 battleHistory（合并，不覆盖）
+    if (roomData.correct_log && Array.isArray(roomData.correct_log)) {
+        battleHistory = roomData.correct_log.slice();
+    }
     const p1 = roomData.player1 || '玩家1';
     const p2 = roomData.player2 ? roomData.player2 : '等待对手加入...';
     document.getElementById('battleScore').textContent = 
@@ -1206,12 +1225,13 @@ function handleBattleUpdate(roomData) {
     const rangeText = (roomData.range_type === 'city' || battleRange === 'city') ? '地级市' : '县级';
     const modeInfo = `<span style="font-size:12px;color:#666;">${modeText} · ${targetText} · ${rangeText}</span>`;
     
-        // 根据模式修改按钮文字
+    // 根据模式修改按钮文字
     if (roomData.mode === 'score') {
         document.getElementById('battleGiveUpBtn').textContent = '🔄 换一个';
     } else {
         document.getElementById('battleGiveUpBtn').textContent = '🏳️ 放弃';
     }
+
     if (roomData.status === 'waiting') {
         document.getElementById('battleRoomInfo').innerHTML = `房间号: ${battleRoomId} | 等待对手加入...<br>${modeInfo}`;
     } else if (roomData.status === 'playing') {
@@ -1219,15 +1239,16 @@ function handleBattleUpdate(roomData) {
         if (!(roomData.mode === 'score' && battleTimer)) {
             document.getElementById('battleRoomInfo').innerHTML = `房间号: ${battleRoomId} | 对战进行中！<br>${modeInfo}`;
         }
-                // 竞分模式启用按钮
+        // 竞分模式启用按钮
         if (roomData.mode === 'score' && !battleTimer) {
             document.getElementById('battleGiveUpBtn').disabled = false;
         }
-                // 竞分模式：房主启动倒计时
+        // 竞分模式：房主启动倒计时
         if (roomData.mode === 'score' && battlePlayerNumber === 1 && !battleTimer) {
             startScoreBattle();
         }
-        // 检查双方放弃状态
+
+        // 检查双方放弃状态（仅竞速）
         if (roomData.mode === 'race') {
             const myGiveup = battlePlayerNumber === 1 ? roomData.player1_giveup : roomData.player2_giveup;
             const otherGiveup = battlePlayerNumber === 1 ? roomData.player2_giveup : roomData.player1_giveup;
@@ -1236,12 +1257,6 @@ function handleBattleUpdate(roomData) {
             if (roomData.player1_giveup && roomData.player2_giveup) {
                 document.getElementById('battleQuestion').textContent = '🏳️ 双方都放弃，换新题...';
                 document.getElementById('battleInput').disabled = true;
-                    // 根据模式修改按钮文字
-    if (battleMode === 'score') {
-        document.getElementById('battleGiveUpBtn').textContent = '🔄 换一个';
-    } else {
-        document.getElementById('battleGiveUpBtn').textContent = '🏳️ 放弃';
-    }
                 document.getElementById('battleGiveUpBtn').disabled = true;
                 
                 if (battlePlayerNumber === 1 && battleLastQuestion !== null) {
@@ -1266,6 +1281,7 @@ function handleBattleUpdate(roomData) {
             }
         }
         
+        // ==================== 竞速模式：题目同步 ====================
         if (roomData.mode === 'race') {
             const totalScore = (roomData.player1_score || 0) + (roomData.player2_score || 0);
             const scoreIncreased = totalScore > battleLastTotalScore;
@@ -1289,21 +1305,31 @@ function handleBattleUpdate(roomData) {
                 battleLastQuestion = roomData.current_question;
                 battleGameStarted = true;
                 battleAnswered = false;
+                battleSubmitLock = false;
                 battleQuestionLoaded = true;
-                    document.getElementById('battleInput').disabled = false;
-    document.getElementById('battleSubmitBtn').disabled = false;
-                document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
                 document.getElementById('battleInput').disabled = false;
                 document.getElementById('battleSubmitBtn').disabled = false;
+                document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
                 document.getElementById('battleGiveUpBtn').disabled = false;
                 if (roomData.current_question !== battleCurrentDisplayed) {
                     loadBattleDistrict(roomData.current_question);
                 }
             }
         }
+
     } else if (roomData.status === 'finished') {
-        const winner = roomData.player1_score > roomData.player2_score ? roomData.player1 + ' 获胜' : 
-                      roomData.player1_score < roomData.player2_score ? roomData.player2 + ' 获胜' : '平局';
+        let winner;
+        if (roomData.winner === 'tie' || roomData.player1_score === roomData.player2_score) {
+            winner = '平局';
+        } else if (roomData.winner === 'player1') {
+            winner = roomData.player1 + ' 获胜';
+        } else if (roomData.winner === 'player2') {
+            winner = roomData.player2 + ' 获胜';
+        } else {
+            winner = roomData.player1_score > roomData.player2_score
+                ? roomData.player1 + ' 获胜'
+                : roomData.player2 + ' 获胜';
+        }
         document.getElementById('battleRoomInfo').textContent = `🏆 ${winner}`;
         document.getElementById('battleInput').disabled = true;
         document.getElementById('battleSubmitBtn').disabled = true;
@@ -1330,6 +1356,7 @@ async function startRaceQuestion() {
         battleGameStarted = true;
         battleQuestionLoaded = true;
         battleAnswered = false;
+battleSubmitLock = false;
         document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
         document.getElementById('battleInput').disabled = false;
         document.getElementById('battleSubmitBtn').disabled = false;
@@ -1348,6 +1375,7 @@ async function startRaceQuestion() {
         battleGameStarted = true;
         battleQuestionLoaded = true;
         battleAnswered = false;
+battleSubmitLock = false;
         document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
         document.getElementById('battleInput').disabled = false;
         document.getElementById('battleSubmitBtn').disabled = false;
@@ -1366,12 +1394,16 @@ async function startRaceQuestion() {
 }
 
 async function submitBattleAnswer() {
-    if (!supabaseClient || !battleRoomId || battleAnswered) return;
-    
+    if (!supabaseClient || !battleRoomId || battleAnswered || battleSubmitLock) return;
+
+    const now = Date.now();
+    if (now - battleLastSubmitTime < 300) return;
+
     const input = document.getElementById('battleInput').value.trim();
     if (!input) return;
-    
-    // 立即锁定
+
+    battleSubmitLock = true;
+    battleLastSubmitTime = now;
     battleAnswered = true;
     document.getElementById('battleSubmitBtn').disabled = true;
     document.getElementById('battleInput').disabled = true;
@@ -1384,6 +1416,7 @@ async function submitBattleAnswer() {
     
     if (!data) {
         battleAnswered = false;
+battleSubmitLock = false;
         document.getElementById('battleSubmitBtn').disabled = false;
         document.getElementById('battleInput').disabled = false;
         return;
@@ -1396,6 +1429,7 @@ async function submitBattleAnswer() {
     if (data.mode === 'race') {
         if (!data.current_question) {
             battleAnswered = false;
+battleSubmitLock = false;
             document.getElementById('battleSubmitBtn').disabled = false;
             document.getElementById('battleInput').disabled = false;
             return;
@@ -1404,6 +1438,7 @@ async function submitBattleAnswer() {
     } else {
         if (!battleOwnQuestion) {
             battleAnswered = false;
+battleSubmitLock = false;
             document.getElementById('battleSubmitBtn').disabled = false;
             document.getElementById('battleInput').disabled = false;
             return;
@@ -1439,31 +1474,54 @@ async function submitBattleAnswer() {
         playSound('correct');
         document.getElementById('battleQuestion').textContent = `✅ 答对了！是 ${correctName}`;
 
-                // 记录复盘
-        battleHistory.push({
+        // 写入服务器 correct_log（原子追加，不会覆盖）
+        const record = {
             question: targetName,
-            winner: battlePlayerName,
+            player: battlePlayerName,
+            playerNumber: battlePlayerNumber,
             time: new Date().toLocaleTimeString()
-        });
-        // 保持锁定，等待新题出现
+        };
+        try {
+            const { error } = await supabaseClient.rpc('append_correct_log', {
+                room_id: battleRoomId,
+                log_entry: record
+            });
+            if (error) {
+                console.error('append_correct_log 失败:', error);
+            }
+        } catch (e) {
+            console.error('写 correct_log 异常:', e);
+        }
+
+        // 本地也记一份（用于复盘兜底）
+        battleHistory.push(record);
         
         await addBattleScore();
         
         if (data.mode === 'score') {
+            // 竞分模式：自己答对，自己换题（只本地，不碰服务器）
             setTimeout(() => {
                 document.getElementById('battleInput').disabled = false;
                 document.getElementById('battleSubmitBtn').disabled = false;
                 battleAnswered = false;
+                battleSubmitLock = false;
                 generateOwnQuestion();
-            }, 1000);
+            }, 800);
+        } else {
+            // 竞速模式：谁答对谁清空服务器题目，触发双方换题
+            await supabaseClient
+                .from('battle_rooms')
+                .update({ current_question: null })
+                .eq('id', battleRoomId)
+                .eq('current_question', targetName);
         }
-        // 竞速模式：等待 handleBattleUpdate 出新题，会自动恢复
     } else {
         playSound('wrong');
         document.getElementById('battleQuestion').textContent = '❌ 再试试！';
         
         // 答错解锁
         battleAnswered = false;
+battleSubmitLock = false;
         document.getElementById('battleSubmitBtn').disabled = false;
         document.getElementById('battleInput').disabled = false;
         document.getElementById('battleInput').focus();
@@ -1473,42 +1531,23 @@ async function submitBattleAnswer() {
 // 加分
 async function addBattleScore() {
     if (!supabaseClient || !battleRoomId) return;
-    
+
     const scoreField = battlePlayerNumber === 1 ? 'player1_score' : 'player2_score';
-    
-    // 用 RPC 原子递增分数
-    const { data, error } = await supabaseClient.rpc('increment_score', {
+    const { error } = await supabaseClient.rpc('increment_score', {
         room_id: battleRoomId,
         score_field: scoreField
     });
-    
-    if (error) {
-        console.error('加分失败:', error);
-        return;
-    }
-    
-    // 检查是否到目标分
-    const { data: roomData } = await supabaseClient
-        .from('battle_rooms')
-        .select('player1_score, player2_score, target_score, mode')
-        .eq('id', battleRoomId)
-        .single();
-    
-    if (!roomData) return;
-    
-    const newScore = battlePlayerNumber === 1 ? roomData.player1_score : roomData.player2_score;
-    
-    if (roomData.mode === 'race' && newScore >= roomData.target_score) {
-        await supabaseClient
-            .from('battle_rooms')
-            .update({ status: 'finished' })
-            .eq('id', battleRoomId);
-    }
+
+    if (error) console.error('加分失败:', error);
+    // 胜负由服务器判定，前端交给 handleBattleUpdate 处理
 }
 
 // ==================== 模式2：竞分对决 ====================
 async function startScoreBattle() {
     if (!supabaseClient || !battleRoomId) return;
+    
+    // 防止重复启动（并发/重复触发）
+    if (battleTimer) return;
     
     const { data } = await supabaseClient
         .from('battle_rooms')
@@ -1516,11 +1555,13 @@ async function startScoreBattle() {
         .eq('id', battleRoomId)
         .single();
     
+    // await 期间可能被再次触发，二次检查
+    if (battleTimer) return;
+    
     const duration = data?.duration || 60;
     let timeLeft = duration;
     document.getElementById('battleRoomInfo').textContent = `⏱ 剩余时间: ${timeLeft}秒`;
     
-    if (battleTimer) clearInterval(battleTimer);
     battleTimer = setInterval(async () => {
         timeLeft--;
         const rangeText = battleRange === 'city' ? '地级市' : '县级';
@@ -1531,23 +1572,52 @@ async function startScoreBattle() {
             battleTimer = null;
             document.getElementById('battleInput').disabled = true;
             if (battlePlayerNumber === 1) {
+                const { data: room } = await supabaseClient
+                    .from('battle_rooms')
+                    .select('player1_score, player2_score')
+                    .eq('id', battleRoomId)
+                    .single();
+
+                let winner = 'tie';
+                if (room && room.player1_score > room.player2_score) winner = 'player1';
+                else if (room && room.player2_score > room.player1_score) winner = 'player2';
+
                 await supabaseClient
                     .from('battle_rooms')
-                    .update({ status: 'finished' })
+                    .update({ status: 'finished', winner: winner })
                     .eq('id', battleRoomId);
             }
         }
     }, 1000);
     
-    generateOwnQuestion();
+    // 只在 index 还是 0 时出第一题，绝不重置 index
+    if (battleQuestionIndex === 0) {
+        battleQuestionIndex = 1;
+        const firstQ = getRandomBattleQuestion();
+        battleOwnQuestion = firstQ;
+        battleCurrentQuestionId = firstQ;
+        battleAnswered = false;
+        battleSubmitLock = false;
+
+        loadBattleDistrict(firstQ);
+        document.getElementById('battleQuestion').textContent =
+            battleRange === 'city' ? '请猜地级' : '请猜区县';
+        document.getElementById('battleInput').disabled = false;
+        document.getElementById('battleSubmitBtn').disabled = false;
+    }
 }
 
-function generateOwnQuestion() {
+async function generateOwnQuestion() {
     if (!battleRoomId) return;
-    battleOwnQuestion = getRandomBattleQuestion();
+
     battleQuestionIndex++;
+    battleOwnQuestion = getRandomBattleQuestion();
+    battleCurrentQuestionId = battleOwnQuestion;
+
     battleAnswered = false;
-    document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
+    battleSubmitLock = false;
+    document.getElementById('battleQuestion').textContent =
+        battleRange === 'city' ? '请猜地级' : '请猜区县';
     document.getElementById('battleInput').disabled = false;
     document.getElementById('battleSubmitBtn').disabled = false;
     loadBattleDistrict(battleOwnQuestion);
@@ -1583,6 +1653,7 @@ async function leaveBattleRoom() {
     battleOwnQuestion = null;
     battleQuestionLoaded = false;
     battleAnswered = false;
+battleSubmitLock = false;
     battleLastQuestion = null;
     battleCurrentDisplayed = null;
     battleResultShown = false;
@@ -1688,9 +1759,13 @@ function showBattleResult(roomData, winner) {
     panel.id = 'battleResultPanel';
     panel.style.cssText = 'position:fixed !important;top:50% !important;left:50% !important;transform:translate(-50%,-50%) !important;background:white;padding:30px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999 !important;text-align:center;min-width:300px;opacity:0;transition:opacity 0.3s ease;';
     
-    const isWinner = (battlePlayerNumber === 1 && roomData.player1_score > roomData.player2_score) ||
-                     (battlePlayerNumber === 2 && roomData.player2_score > roomData.player1_score);
-    const isDraw = roomData.player1_score === roomData.player2_score;
+const iAmP1 = battlePlayerNumber === 1;
+const isDraw = roomData.winner === 'tie' ||
+               (!roomData.winner && roomData.player1_score === roomData.player2_score);
+const isWinner = !isDraw && (
+    (roomData.winner === 'player1' && iAmP1) ||
+    (roomData.winner === 'player2' && !iAmP1)
+);
     
     let title, color, emoji;
     if (isDraw) {
@@ -1733,14 +1808,14 @@ function showBattleResult(roomData, winner) {
     };
 }
 
-let battleHistory = [];
-
 function saveBattleRecord(roomData) {
     const records = JSON.parse(localStorage.getItem('battleRecords') || '[]');
     
-    // 同一房间只保存一次
     const exists = records.find(r => r.roomId === battleRoomId);
-    if (exists) return;
+    if (exists) {
+        battleHistory = [];
+        return;
+    }
     
     const record = {
         time: new Date().toLocaleString(),
@@ -1753,7 +1828,8 @@ function saveBattleRecord(roomData) {
         player2: roomData.player2,
         player1Score: roomData.player1_score,
         player2Score: roomData.player2_score,
-        history: battleHistory.slice()  // 复盘数据
+        winner: roomData.winner || null,
+        history: battleHistory.slice()
     };
     
     records.unshift(record);
@@ -1838,25 +1914,15 @@ function showBattleHistory() {
 }
 
 function getRandomBattleQuestion() {
-    if (battleMode === 'score') {
-        const pool = battleRange === 'city' 
-            ? getCityPool() 
-            : Object.keys(ADJACENCY);
-        
-        // 用 mulberry32 伪随机算法，质量更好
-        const seed = mulberry32(hashString(battleRoomId) + battleQuestionIndex);
-        const index = Math.floor(seed() * pool.length);
-        
-        return pool[index];
-    }
-    
-    if (battleRange === 'city') {
-        const cities = getCityPool();
-        return cities[Math.floor(Math.random() * cities.length)];
-    } else {
-        const districts = Object.keys(ADJACENCY);
-        return districts[Math.floor(Math.random() * districts.length)];
-    }
+    const pool = battleRange === 'city'
+        ? getCityPool()
+        : Object.keys(ADJACENCY);
+
+    // 纯种子出题：同 questionIndex → 同 seed → 同题
+    const seed = mulberry32(hashString(
+        battleRoomId + '_q_' + battleQuestionIndex
+    ));
+    return pool[Math.floor(seed() * pool.length)];
 }
 
 function hashString(str) {
@@ -1882,29 +1948,58 @@ function mulberry32(a) {
 function showBattleReplay(roomId) {
     const records = JSON.parse(localStorage.getItem('battleRecords') || '[]');
     const record = records.find(r => r.roomId === roomId);
-    if (!record || !record.history) return;
-    
+    if (!record || !record.history || record.history.length === 0) {
+        alert('暂无复盘数据');
+        return;
+    }
+    playSound('click');
+
     const overlay = document.createElement('div');
     overlay.id = 'replayOverlay';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:99998;';
     document.body.appendChild(overlay);
-    
+
     const panel = document.createElement('div');
-    panel.style.cssText = 'position:fixed !important;top:50% !important;left:50% !important;transform:translate(-50%,-50%) !important;background:white;padding:25px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999 !important;max-width:80vw;max-height:70vh;overflow-y:auto;min-width:300px;';
-    
-    let html = '<h3 style="text-align:center;margin-bottom:15px;">📋 对局复盘</h3>';
-    html += '<div style="font-size:12px;color:#666;margin-bottom:10px;">' + record.player1 + ' vs ' + record.player2 + '</div>';
-    
+    panel.style.cssText = 'position:fixed !important;top:50% !important;left:50% !important;transform:translate(-50%,-50%) !important;background:white;padding:20px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999 !important;max-width:85vw;max-height:75vh;overflow-y:auto;min-width:300px;';
+
+    const modeText = record.mode === 'race'
+        ? `🏁 竞速 · 目标 ${record.targetScore} 分`
+        : `📊 竞分 · 限时 ${record.duration} 秒`;
+    const rangeText = record.rangeType === 'city' ? '地级市' : '县级';
+
+    let html = `
+        <h3 style="text-align:center;margin-bottom:10px;">📋 对局复盘</h3>
+        <div style="text-align:center;font-size:14px;margin-bottom:6px;">
+            ${record.player1} <b>${record.player1Score}</b> : <b>${record.player2Score}</b> ${record.player2}
+        </div>
+        <div style="text-align:center;font-size:11px;color:#999;margin-bottom:12px;">
+            ${modeText} · ${rangeText} · ${record.time}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="background:#f5f5f5;">
+                <th style="padding:6px;text-align:left;">#</th>
+                <th style="padding:6px;text-align:left;">题目</th>
+                <th style="padding:6px;text-align:right;">答对者</th>
+            </tr></thead><tbody>`;
+
     record.history.forEach((h, i) => {
-        html += `<div style="padding:8px;border-bottom:1px solid #eee;font-size:13px;">
-            <span style="color:#999;">第${i+1}题：</span>
-            <span style="font-weight:bold;">${h.question}</span>
-            <span style="float:right;color:#10b981;">${h.winner} 答对</span>
-        </div>`;
+        html += `<tr style="border-bottom:1px solid #eee;">
+            <td style="padding:6px;color:#999;">${i + 1}</td>
+            <td style="padding:6px;">${h.question}</td>
+            <td style="padding:6px;text-align:right;color:#10b981;">${h.player || h.winner || '—'}</td>
+        </tr>`;
     });
-    
-    html += '<button onclick="document.getElementById(\'replayOverlay\').remove(); this.parentElement.remove();" style="display:block;width:100%;margin-top:15px;padding:10px;border:none;border-radius:8px;background:#4a6cf7;color:white;cursor:pointer;">关闭</button>';
-    
+
+    html += `</tbody></table>
+        <button id="replayCloseBtn" style="display:block;width:100%;margin-top:15px;padding:10px;border:none;border-radius:8px;background:#4a6cf7;color:white;cursor:pointer;">关闭</button>`;
+
     panel.innerHTML = html;
     document.body.appendChild(panel);
+
+    document.getElementById('replayCloseBtn').onclick = () => {
+        playSound('click');
+        panel.remove();
+        overlay.remove();
+    };
 }
+
