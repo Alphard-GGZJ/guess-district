@@ -1208,7 +1208,7 @@ async function subscribeBattleRoom() {
 // 处理房间更新
 function handleBattleUpdate(roomData) {
     if (!roomData) return;
-    // 同步服务器 correct_log 到本地 battleHistory（合并，不覆盖）
+    // 服务器 correct_log 权威，直接覆盖本地
     if (roomData.correct_log && Array.isArray(roomData.correct_log)) {
         battleHistory = roomData.correct_log.slice();
     }
@@ -1310,15 +1310,15 @@ function handleBattleUpdate(roomData) {
             } else if (roomData.current_question) {
                 battleLastQuestion = roomData.current_question;
                 battleGameStarted = true;
-                battleAnswered = false;
-                battleSubmitLock = false;
                 battleQuestionLoaded = true;
-                document.getElementById('battleInput').value = '';
-                document.getElementById('battleInput').disabled = false;
-                document.getElementById('battleSubmitBtn').disabled = false;
-                document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
-                document.getElementById('battleGiveUpBtn').disabled = false;
                 if (roomData.current_question !== battleCurrentDisplayed) {
+                    battleAnswered = false;
+                    battleSubmitLock = false;
+                    document.getElementById('battleInput').value = '';
+                    document.getElementById('battleInput').disabled = false;
+                    document.getElementById('battleSubmitBtn').disabled = false;
+                    document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
+                    document.getElementById('battleGiveUpBtn').disabled = false;
                     loadBattleDistrict(roomData.current_question);
                 }
             }
@@ -1507,21 +1507,18 @@ battleSubmitLock = false;
         await addBattleScore();
         
         if (data.mode === 'score') {
-            // 竞分模式：自己答对，自己换题（只本地，不碰服务器）
+            // 竞分：自己答对，本地换题
             setTimeout(() => {
-                document.getElementById('battleInput').disabled = false;
-                document.getElementById('battleSubmitBtn').disabled = false;
                 battleAnswered = false;
                 battleSubmitLock = false;
                 generateOwnQuestion();
             }, 800);
         } else {
-            // 竞速模式：谁答对谁清空服务器题目，触发双方换题
+            // 竞速：清空服务器题目
             await supabaseClient
                 .from('battle_rooms')
                 .update({ current_question: null })
-                .eq('id', battleRoomId)
-                .eq('current_question', targetName);
+                .eq('id', battleRoomId);
         }
     } else {
         playSound('wrong');
@@ -1553,23 +1550,20 @@ async function addBattleScore() {
 // ==================== 模式2：竞分对决 ====================
 async function startScoreBattle() {
     if (!supabaseClient || !battleRoomId) return;
-    
-    // 防止重复启动（并发/重复触发）
     if (battleTimer) return;
-    
+
     const { data } = await supabaseClient
         .from('battle_rooms')
         .select('duration')
         .eq('id', battleRoomId)
         .single();
-    
-    // await 期间可能被再次触发，二次检查
+
     if (battleTimer) return;
-    
+
     const duration = data?.duration || 60;
     let timeLeft = duration;
     document.getElementById('battleRoomInfo').textContent = `⏱ 剩余时间: ${timeLeft}秒`;
-    
+
     battleTimer = setInterval(async () => {
         timeLeft--;
         const rangeText = battleRange === 'city' ? '地级市' : '县级';
@@ -1597,8 +1591,7 @@ async function startScoreBattle() {
             }
         }
     }, 1000);
-    
-    // 只在 index 还是 0 时出第一题，绝不重置 index
+
     if (battleQuestionIndex === 0) {
         battleQuestionIndex = 1;
         const firstQ = getRandomBattleQuestion();
@@ -1618,6 +1611,7 @@ async function startScoreBattle() {
 
 async function generateOwnQuestion() {
     if (!battleRoomId) return;
+    if (battleMode !== 'score') return;
 
     battleQuestionIndex++;
     battleOwnQuestion = getRandomBattleQuestion();
