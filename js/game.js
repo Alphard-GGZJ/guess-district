@@ -2285,6 +2285,9 @@ function playSound(type) {
         } else if (type === 'share') {
             tone(700, 0, 0.1, 'sine', 0.15);
             tone(1000, 0.1, 0.15, 'sine', 0.15);
+        } else if (type === 'ready') {
+            tone(600, 0, 0.12, 'sine', 0.2);
+            tone(900, 0.1, 0.18, 'sine', 0.22);
         }
     } catch (e) {
         // 忽略音频错误

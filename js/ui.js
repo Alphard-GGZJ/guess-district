@@ -1055,6 +1055,7 @@ battleSubmitLock = false;
     battleResultShown = false;
     battleQuestionIndex = 0;
     battleHistory = [];
+    window._battleReadySoundPlayed = false;
     battleCurrentDisplayed = null;
     battleOwnQuestion = null;
     battleAnswered = false;
@@ -1235,6 +1236,11 @@ function handleBattleUpdate(roomData) {
     if (roomData.status === 'waiting') {
         document.getElementById('battleRoomInfo').innerHTML = `房间号: ${battleRoomId} | 等待对手加入...<br>${modeInfo}`;
     } else if (roomData.status === 'playing') {
+        // 人齐提示音（只播一次）
+        if (!window._battleReadySoundPlayed && roomData.player2) {
+            window._battleReadySoundPlayed = true;
+            playSound('ready');
+        }
         // 竞分模式倒计时中，不覆盖房间信息
         if (!(roomData.mode === 'score' && battleTimer)) {
             document.getElementById('battleRoomInfo').innerHTML = `房间号: ${battleRoomId} | 对战进行中！<br>${modeInfo}`;
@@ -1307,6 +1313,7 @@ function handleBattleUpdate(roomData) {
                 battleAnswered = false;
                 battleSubmitLock = false;
                 battleQuestionLoaded = true;
+                document.getElementById('battleInput').value = '';
                 document.getElementById('battleInput').disabled = false;
                 document.getElementById('battleSubmitBtn').disabled = false;
                 document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
@@ -1376,6 +1383,7 @@ battleSubmitLock = false;
         battleQuestionLoaded = true;
         battleAnswered = false;
 battleSubmitLock = false;
+        document.getElementById('battleInput').value = '';
         document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
         document.getElementById('battleInput').disabled = false;
         document.getElementById('battleSubmitBtn').disabled = false;
@@ -1600,6 +1608,7 @@ async function startScoreBattle() {
         battleSubmitLock = false;
 
         loadBattleDistrict(firstQ);
+        document.getElementById('battleInput').value = '';
         document.getElementById('battleQuestion').textContent =
             battleRange === 'city' ? '请猜地级' : '请猜区县';
         document.getElementById('battleInput').disabled = false;
@@ -1616,6 +1625,7 @@ async function generateOwnQuestion() {
 
     battleAnswered = false;
     battleSubmitLock = false;
+    document.getElementById('battleInput').value = '';
     document.getElementById('battleQuestion').textContent =
         battleRange === 'city' ? '请猜地级' : '请猜区县';
     document.getElementById('battleInput').disabled = false;
@@ -1650,6 +1660,7 @@ async function leaveBattleRoom() {
     
     battleRoomId = null;
     battlePlayerNumber = null;
+    window._battleReadySoundPlayed = false;
     battleOwnQuestion = null;
     battleQuestionLoaded = false;
     battleAnswered = false;
