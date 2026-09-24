@@ -1296,26 +1296,23 @@ function handleBattleUpdate(roomData) {
             if (totalScore > battleLastTotalScore) {
                 battleLastTotalScore = totalScore;
             }
-            
-            if (roomData.current_question === null) {
-                if (battleLastQuestion === null) {
-                    // 未开局，什么都不做，等房主出题
+
+            // 未开局
+            if (!roomData.current_question && !roomData.player1_giveup && !roomData.player2_giveup) {
+                if (battlePlayerNumber === 1 && roomData.player2 && !battleGameStarted) {
+                    battleGameStarted = true;
                     document.getElementById('battleInput').disabled = true;
-                    document.getElementById('battleQuestion').textContent = '⏳ 准备中...';
-                } else if (battlePlayerNumber === 1) {
-                    // 房主出下一题
+                    document.getElementById('battleQuestion').textContent = '⏳ 准备出题...';
+                    startRaceQuestion();
+                } else if (battlePlayerNumber !== 1) {
                     document.getElementById('battleInput').disabled = true;
-                    document.getElementById('battleQuestion').textContent = '⏳ 等待下一题...';
-                    battleGameStarted = false;
-                    battleLastQuestion = null;
-                    setTimeout(() => startRaceQuestion(), 800);
-                } else {
-                    // 客机等待
-                    document.getElementById('battleInput').disabled = true;
-                    document.getElementById('battleQuestion').textContent = '⏳ 对方已答对，等待下一题...';
+                    document.getElementById('battleQuestion').textContent = '⏳ 等待对手出题...';
                 }
-            } else if (roomData.current_question && roomData.current_question !== battleCurrentDisplayed) {
-                // 题目变化 → 双方都加载新题
+                return;
+            }
+
+            // 题目变化
+            if (roomData.current_question && roomData.current_question !== battleCurrentDisplayed) {
                 battleLastQuestion = roomData.current_question;
                 battleGameStarted = true;
                 battleQuestionLoaded = true;
@@ -1356,49 +1353,21 @@ function handleBattleUpdate(roomData) {
 // ==================== 模式1：竞速对决 ====================
 async function startRaceQuestion() {
     if (!supabaseClient || !battleRoomId) return;
-    
+
     const { data } = await supabaseClient
         .from('battle_rooms')
         .select('current_question')
         .eq('id', battleRoomId)
         .single();
-    
-    // 已有题目，直接加载
-    if (data && data.current_question) {
-        battleLastQuestion = data.current_question;
-        battleGameStarted = true;
-        battleQuestionLoaded = true;
-        battleAnswered = false;
-battleSubmitLock = false;
-        document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
-        document.getElementById('battleInput').disabled = false;
-        document.getElementById('battleSubmitBtn').disabled = false;
-        document.getElementById('battleGiveUpBtn').disabled = false;
-        if (data.current_question !== battleCurrentDisplayed) {
-            loadBattleDistrict(data.current_question);
-        }
-        return;
-    }
-    
-    // 没有题目，房主创建
-    if (battlePlayerNumber === 1 && (!data || !data.current_question)) {
-        const randomDistrict = getRandomBattleQuestion();
-        
-        battleLastQuestion = randomDistrict;
-        battleGameStarted = true;
-        battleQuestionLoaded = true;
-        battleAnswered = false;
-battleSubmitLock = false;
-        document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级' : '请猜区县';
-        document.getElementById('battleInput').disabled = false;
-        document.getElementById('battleSubmitBtn').disabled = false;
-        document.getElementById('battleGiveUpBtn').disabled = false;
-        loadBattleDistrict(randomDistrict);
-        
+
+    if (data && data.current_question) return;
+
+    if (battlePlayerNumber === 1) {
+        const firstQ = getRandomBattleQuestion();
         await supabaseClient
             .from('battle_rooms')
-            .update({ 
-                current_question: randomDistrict,
+            .update({
+                current_question: firstQ,
                 player1_giveup: false,
                 player2_giveup: false
             })
@@ -1515,17 +1484,21 @@ battleSubmitLock = false;
         await addBattleScore();
         
         if (data.mode === 'score') {
-            // 竞分：自己答对，本地换题
             setTimeout(() => {
                 battleAnswered = false;
                 battleSubmitLock = false;
                 generateOwnQuestion();
             }, 800);
         } else {
-            // 竞速：清空服务器题目（去掉乐观锁条件，谁先答谁清）
+            const nextQ = getRandomBattleQuestion();
+            battleLastQuestion = nextQ;
             await supabaseClient
                 .from('battle_rooms')
-                .update({ current_question: null })
+                .update({
+                    current_question: nextQ,
+                    player1_giveup: false,
+                    player2_giveup: false
+                })
                 .eq('id', battleRoomId);
         }
     } else {
@@ -1926,14 +1899,8 @@ function showBattleHistory() {
 }
 
 function getRandomBattleQuestion() {
-    const pool = battleRange === 'city'
-        ? getCityPool()
-        : Object.keys(ADJACENCY);
-
-    const seed = mulberry32(hashString(
-        battleRoomId + '_q_' + battleQuestionIndex
-    ));
-    return pool[Math.floor(seed() * pool.length)];
+    const pool = battleRange === 'city' ? getCityPool() : Object.keys(ADJACENCY);
+    return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function hashString(str) {
