@@ -29,7 +29,7 @@ html, body {
     border-radius: 10px;
     box-shadow: 0 2px 15px rgba(0, 0, 0, 0.2);
     font-size: 14px;
-    width: 300px;
+    width: 380px;
     max-height: calc(100vh - 20px);
     overflow-y: auto;
     box-sizing: border-box;
@@ -56,19 +56,17 @@ html, body {
 }
 
 #modeSelect {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 8px;
 }
 
 #modeSelect button {
-    padding: 6px 4px;
+    padding: 6px 10px;
     font-size: 12px;
     margin: 0;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 #panel input {
@@ -233,7 +231,7 @@ html, body {
 
     #panel {
         width: auto;
-        max-width: 240px;
+        max-width: 90vw;
         padding: 10px;
     }
 
@@ -274,6 +272,11 @@ html, body {
         font-size: 14px;
     }
 
+        #modeSelect button {
+        padding: 8px 10px;
+        font-size: 13px;
+    }
+    
     #panel input {
         padding: 10px;
         font-size: 16px;
