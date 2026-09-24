@@ -1252,6 +1252,10 @@ function handleBattleUpdate(roomData) {
         if (roomData.mode === 'score' && battlePlayerNumber === 1 && !battleTimer) {
             startScoreBattle();
         }
+        // 竞速模式：房主启动第一题（人齐 & 还没出题）
+        if (roomData.mode === 'race' && battlePlayerNumber === 1 && roomData.player2 && !battleGameStarted && battleLastQuestion === null) {
+            startRaceQuestion();
+        }
 
         // 检查双方放弃状态（仅竞速）
         if (roomData.mode === 'race') {
@@ -1294,14 +1298,19 @@ function handleBattleUpdate(roomData) {
             }
             
             if (roomData.current_question === null) {
-                // 题目已清空 → 房主出下一题
-                if (battlePlayerNumber === 1 && battleLastQuestion !== null) {
+                if (battleLastQuestion === null) {
+                    // 未开局，什么都不做，等房主出题
+                    document.getElementById('battleInput').disabled = true;
+                    document.getElementById('battleQuestion').textContent = '⏳ 准备中...';
+                } else if (battlePlayerNumber === 1) {
+                    // 房主出下一题
                     document.getElementById('battleInput').disabled = true;
                     document.getElementById('battleQuestion').textContent = '⏳ 等待下一题...';
                     battleGameStarted = false;
                     battleLastQuestion = null;
                     setTimeout(() => startRaceQuestion(), 800);
-                } else if (battlePlayerNumber !== 1) {
+                } else {
+                    // 客机等待
                     document.getElementById('battleInput').disabled = true;
                     document.getElementById('battleQuestion').textContent = '⏳ 对方已答对，等待下一题...';
                 }
