@@ -31,6 +31,7 @@ let timerInterval = null;
 let bestTime30 = null;
 
 let dailyMode = false;
+let dailyCityMode = false;
 let gameSpeed = 'normal';
 let dailyQuestions = [];
 let dailyIndex = 0;
@@ -408,6 +409,22 @@ function matchForMode(input, forceMode) {
     return { status: 'none' };
 }
 
+function matchDailyCity(input) {
+    const pool = getCityPool();
+    const exact = [];
+
+    for (const official of pool) {
+        const aliases = aliasMap[official] || [official];
+        if (aliases.includes(input)) {
+            exact.push(official);
+        }
+    }
+
+    if (exact.length === 1) return { status: 'exact', name: exact[0] };
+    if (exact.length > 1) return { status: 'ambiguous', names: exact };
+    return { status: 'none' };
+}
+
 function initMap() {
     // 检查高德地图 API 是否加载成功
     if (typeof AMap === 'undefined') {
@@ -581,7 +598,32 @@ function getDailyQuestions() {
     return questions;
 }
 
-function startDailyChallenge() {
+function getDailyCityQuestions() {
+    const today = new Date();
+    const dateStr = today.getFullYear() + '-' + (today.getMonth() + 1) + '-' + today.getDate();
+
+    let seed = 0;
+    for (let i = 0; i < dateStr.length; i++) {
+        seed = (seed * 31 + dateStr.charCodeAt(i)) % 1000000007;
+    }
+
+    function seededRandom() {
+        seed = (seed * 9301 + 49297) % 233280;
+        return seed / 233280;
+    }
+
+    const pool = [...getCityPool()];
+    const questions = [];
+
+    while (questions.length < 10 && pool.length > 0) {
+        const idx = Math.floor(seededRandom() * pool.length);
+        questions.push(pool.splice(idx, 1)[0]);
+    }
+
+    return questions;
+}
+
+function startDailyChallenge(isCityMode) {
     if (gameMode === 'classic' && document.getElementById('newBtn').disabled) {
         setMsg('⏳ 经典模式加载中，请稍候', '');
         return;
@@ -612,7 +654,8 @@ function startDailyChallenge() {
     }
 
     dailyMode = true;
-    dailyQuestions = getDailyQuestions();
+    dailyCityMode = !!isCityMode;
+    dailyQuestions = dailyCityMode ? getDailyCityQuestions() : getDailyQuestions();
     dailyIndex = 0;
     dailyScore = 0;
     dailyCompleted = false;
@@ -644,11 +687,15 @@ function loadDailyQuestion() {
     document.getElementById('dailyMsg').textContent = '';
     document.getElementById('dailyInput').value = '';
     document.getElementById('dailyInput').focus();
-    loadDistrict(name);
+
+    if (dailyCityMode) {
+        loadDailyCity(name);
+    } else {
+        loadDistrict(name);
+    }
 }
 
 function finishDailyChallenge() {
-    // 补全所有没记录的题
     dailyQuestions.forEach(name => {
         if (!dailyCorrectAnswers.includes(name) && !dailyWrongAnswers.includes(name)) {
             dailyWrongAnswers.push(name);
@@ -660,7 +707,8 @@ function finishDailyChallenge() {
     dailyCompleted = true;
     dailyMode = false;
 
-    const key = 'dailyBest_' + new Date().toISOString().slice(0, 10);
+    const suffix = dailyCityMode ? '_city' : '';
+    const key = 'dailyBest_' + new Date().toISOString().slice(0, 10) + suffix;
     const best = Number(localStorage.getItem(key) || '0');
 
     if (dailyScore > best) {
@@ -679,11 +727,13 @@ function finishDailyChallenge() {
     document.getElementById('dailyReviewBtn').classList.remove('pop-in');
     void document.getElementById('dailyReviewBtn').offsetWidth;
     document.getElementById('dailyReviewBtn').classList.add('pop-in');
+
 }
 
 function exitDailyChallenge() {
     dailyMode = false;
     dailyCompleted = false;
+    dailyCityMode = false;
 
     document.getElementById('dailyPanel').style.display = 'none';
     document.getElementById('panelContent').style.display = 'block';
@@ -697,9 +747,11 @@ function exitDailyChallenge() {
 }
 
 function shareDailyResult() {
-    const key = 'dailyBest_' + new Date().toISOString().slice(0, 10);
+    const suffix = dailyCityMode ? '_city' : '';
+    const key = 'dailyBest_' + new Date().toISOString().slice(0, 10) + suffix;
     const best = Number(localStorage.getItem(key) || '0');
-    const text = `📅 看图猜区县 每日挑战\n今日得分：${dailyScore}\n今日最佳：${best}`;
+    const modeName = dailyCityMode ? '地级市' : '县级';
+    const text = `📅 看图猜区县 每日挑战（${modeName}）\n今日得分：${dailyScore}\n今日最佳：${best}`;
 
     if (navigator.clipboard) {
         navigator.clipboard.writeText(text).then(() => {
@@ -715,7 +767,8 @@ function shareDailyResult() {
 
 function generateDailyImage() {
     const dateStr = new Date().toISOString().slice(0, 10);
-    const best = getDailyBest();
+    const best = getDailyBest(dailyCityMode);
+    const modeName = dailyCityMode ? '地级市' : '县级';
 
     const canvas = document.createElement('canvas');
     canvas.width = 600;
@@ -729,7 +782,7 @@ function generateDailyImage() {
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 28px "Microsoft YaHei", Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('看图猜区县 · 每日挑战', canvas.width / 2, 80);
+    ctx.fillText(`看图猜区县 · 每日挑战（${modeName}）`, canvas.width / 2, 80);
 
     ctx.fillStyle = '#9ca3af';
     ctx.font = '18px "Microsoft YaHei", Arial, sans-serif';
@@ -748,7 +801,7 @@ function generateDailyImage() {
     ctx.fillText('今日最佳：' + best, canvas.width / 2, 350);
 
     const link = document.createElement('a');
-    link.download = `每日挑战_${dateStr}.png`;
+    link.download = `每日挑战_${modeName}_${dateStr}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
 }
@@ -1207,6 +1260,30 @@ function loadDistrict(name) {
     searchWithRetry(3);
 }
 
+function loadDailyCity(name) {
+    if (!ds || !dsCity) {
+        setTimeout(() => loadDailyCity(name), 500);
+        return;
+    }
+
+    clearMap();
+    const tl = ++loadId;
+
+    dsCity.search(name, (status, result) => {
+        if (tl !== loadId) return;
+        if (status === 'complete' && result.districtList.length > 0) {
+            const d = result.districtList.find(x => x.level === 'city') || result.districtList[0];
+            if (d && d.boundaries && d.boundaries.length > 0) {
+                showDistrict(d);
+            } else {
+                setMsg('加载失败，换一个', 'wrong');
+            }
+        } else {
+            setMsg('加载失败，换一个', 'wrong');
+        }
+    });
+}
+
 function getCitiesByProvince(province) {
     const map = {
         '北京市': ['110100'],
@@ -1638,19 +1715,18 @@ if (dailyMode) {
     const input = document.getElementById('dailyInput').value.trim();
     if (!input) return;
 
-    const match = matchForMode(input);
+    const match = dailyCityMode ? matchDailyCity(input) : matchForMode(input);
     let correct = false;
 
     if (match.status === 'exact' || match.status === 'partial') {
         const matchBase = match.name.replace(/（.+?）$/, '');
         const targetBase = targetDistrict.name.replace(/（.+?）$/, '');
-
         correct = match.name === targetDistrict.name || matchBase === targetBase;
     } else if (match.status === 'none') {
         const baseInput = input.replace(/（.+?）$/, '');
-        const possible = Object.keys(ADJACENCY).filter(name => {
+        const pool = dailyCityMode ? getCityPool() : Object.keys(ADJACENCY);
+        const possible = pool.filter(name => {
             const aliases = aliasMap[name] || [name];
-
             return aliases.includes(baseInput) ||
                    aliases.includes(baseInput + '区') ||
                    aliases.includes(baseInput + '县') ||
@@ -1663,32 +1739,30 @@ if (dailyMode) {
         }
     }
 
-        if (correct) {
-            playSound('correct');
+    if (correct) {
+        playSound('correct');
 
-            dailyScore += 1;
-            const dailyScoreEl = document.getElementById('dailyScore');
-            dailyScoreEl.textContent = '得分: ' + dailyScore;
-            dailyScoreEl.classList.add('score-bounce');
-            setTimeout(() => dailyScoreEl.classList.remove('score-bounce'), 300);
+        dailyScore += 1;
+        const dailyScoreEl = document.getElementById('dailyScore');
+        dailyScoreEl.textContent = '得分: ' + dailyScore;
+        dailyScoreEl.classList.add('score-bounce');
+        setTimeout(() => dailyScoreEl.classList.remove('score-bounce'), 300);
 
-            // 记录答对的题
-            if (targetDistrict && !dailyCorrectAnswers.includes(targetDistrict.name)) {
-                dailyCorrectAnswers.push(targetDistrict.name);
-            }
-
-            document.getElementById('dailyMsg').textContent = '✅ 正确！';
-            dailyIndex++;
-setTimeout(loadDailyQuestion, getDelay());
-        } else {
-            playSound('wrong');
-
-            document.getElementById('dailyMsg').textContent = '❌ 不对，再猜！';
-            document.getElementById('dailyInput').value = '';
-            document.getElementById('dailyInput').focus();
+        if (targetDistrict && !dailyCorrectAnswers.includes(targetDistrict.name)) {
+            dailyCorrectAnswers.push(targetDistrict.name);
         }
-        return;
+
+        document.getElementById('dailyMsg').textContent = '✅ 正确！';
+        dailyIndex++;
+        setTimeout(loadDailyQuestion, getDelay());
+    } else {
+        playSound('wrong');
+        document.getElementById('dailyMsg').textContent = '❌ 不对，再猜！';
+        document.getElementById('dailyInput').value = '';
+        document.getElementById('dailyInput').focus();
     }
+    return;
+}
 
 const input = document.getElementById('input').value.trim();
 if (!input) return;
@@ -1824,14 +1898,15 @@ function saveBestScore(finalScore) {
     updateBestScoreDisplay();
 }
 
-function getDailyBest() {
-    const key = 'dailyBest_' + new Date().toISOString().slice(0, 10);
+function getDailyBest(isCity) {
+    const suffix = isCity ? '_city' : '';
+    const key = 'dailyBest_' + new Date().toISOString().slice(0, 10) + suffix;
     return Number(localStorage.getItem(key) || '0');
 }
 
 function updateDailyBestDisplay() {
-    const best = getDailyBest();
-    document.getElementById('dailyBestDisplay').textContent = '📅 今日挑战最佳 ' + best;
+    const best = getDailyBest(dailyCityMode);
+    document.getElementById('dailyBestDisplay').textContent = (dailyCityMode ? '🏙️ 地级最佳 ' : '📅 县级最佳 ') + best;
 }
 
 function loadNeighborDistricts(targetAdcode) {

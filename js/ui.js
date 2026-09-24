@@ -48,7 +48,8 @@ function bindUI() {
     document.getElementById('btnNormal').addEventListener('click', () => setMode('normal'));
     document.getElementById('btnHard').addEventListener('click', () => setMode('hard'));
     document.getElementById('btnClassic').addEventListener('click', () => setMode('classic'));
-    document.getElementById('btnDaily').addEventListener('click', () => startDailyChallenge());
+document.getElementById('btnDaily').addEventListener('click', () => startDailyChallenge(false));
+document.getElementById('btnDailyCity').addEventListener('click', () => startDailyChallenge(true));
     document.getElementById('dailyReviewBtn').addEventListener('click', showDailyReview);
 document.getElementById('dailySubmitBtn').addEventListener('click', checkAnswer);
 document.getElementById('dailyExitBtn').addEventListener('click', exitDailyChallenge);
@@ -57,7 +58,6 @@ document.getElementById('dailyImageBtn').addEventListener('click', generateDaily
 document.getElementById('dailyInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') checkAnswer();
 });
-    document.getElementById('btnDaily').addEventListener('click', () => startDailyChallenge());
     document.getElementById('btnTimer').addEventListener('click', toggleTimer);
     document.getElementById('btnMiniGames').addEventListener('click', openMiniGames);
     document.getElementById('btnMiniGamesExit').addEventListener('click', closeMiniGames);
