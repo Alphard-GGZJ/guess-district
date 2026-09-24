@@ -1524,8 +1524,35 @@ async function addBattleScore() {
         score_field: scoreField
     });
 
-    if (error) console.error('加分失败:', error);
-    // 胜负由服务器判定，前端交给 handleBattleUpdate 处理
+    if (error) {
+        console.error('加分失败:', error);
+        return;
+    }
+
+    // 前端兜底：竞速模式检查是否达到目标分
+    const { data: room } = await supabaseClient
+        .from('battle_rooms')
+        .select('mode, target_score, player1_score, player2_score, status')
+        .eq('id', battleRoomId)
+        .single();
+
+    if (!room) return;
+    if (room.status === 'finished') return;
+
+    if (room.mode === 'race') {
+        const myScore = battlePlayerNumber === 1 ? room.player1_score : room.player2_score;
+        if (myScore >= room.target_score) {
+            let winner = 'tie';
+            if (room.player1_score > room.player2_score) winner = 'player1';
+            else if (room.player2_score > room.player1_score) winner = 'player2';
+
+            await supabaseClient
+                .from('battle_rooms')
+                .update({ status: 'finished', winner: winner })
+                .eq('id', battleRoomId)
+                .eq('status', 'playing');
+        }
+    }
 }
 
 // ==================== 模式2：竞分对决 ====================
