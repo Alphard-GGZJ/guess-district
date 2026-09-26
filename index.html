@@ -81,7 +81,11 @@
 </div>
 
 <div id="dailyPanel" style="display:none;">
-    <h3>📅 每日挑战</h3>
+    <h3>
+        📅 每日挑战
+        <button id="toggleDailyBtn" type="button" onclick="toggleDailyPanel()">收起</button>
+    </h3>
+    <div id="dailyContent">
     <div id="dailyScore">得分: 0</div>
     <div id="dailyBestDisplay">📅 今日挑战最佳 0</div>
     <div id="dailyProgress">第 1 / 10 题</div>
@@ -92,7 +96,8 @@
     <button id="dailyImageBtn">🖼️ 生成图片</button>
         <button id="dailyReviewBtn" style="background:#f59e0b;display:none;">📝 错题集</button>
     <button id="dailyExitBtn">退出每日挑战</button>
-        <button id="dailySkipBtn" style="background:#f59e0b;">⏭ 跳过此题</button>
+    <button id="dailySkipBtn" style="background:#f59e0b;">⏭ 跳过此题</button>
+    </div>
 </div>
 
 <div id="miniGamesPanel" style="display:none;">
