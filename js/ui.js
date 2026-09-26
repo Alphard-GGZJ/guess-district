@@ -263,6 +263,23 @@ function togglePanel() {
     }
 }
 
+function toggleDailyPanel() {
+    const content = document.getElementById('dailyContent');
+    const btn = document.getElementById('toggleDailyBtn');
+
+    if (!content || !btn) return;
+
+    const isHidden = getComputedStyle(content).display === 'none';
+
+    if (isHidden) {
+        content.style.display = 'block';
+        btn.textContent = '收起';
+    } else {
+        content.style.display = 'none';
+        btn.textContent = '展开';
+    }
+}
+
 function updateToggleBtnText() {
     const content = document.getElementById('panelContent');
     const btn = document.getElementById('togglePanelBtn');

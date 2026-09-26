@@ -662,8 +662,8 @@ function startDailyChallenge(isCityMode) {
     dailyWrongAnswers = [];
     dailyCorrectAnswers = [];
 
-    document.getElementById('panelContent').style.display = 'none';
-    document.getElementById('dailyPanel').style.display = 'block';
+document.getElementById('panel').style.display = 'none';
+document.getElementById('dailyPanel').style.display = 'block';
     document.getElementById('dailyScore').textContent = '得分: 0';
     document.getElementById('dailyShareBtn').style.display = 'none';
     document.getElementById('dailyImageBtn').style.display = 'none';
@@ -672,6 +672,12 @@ function startDailyChallenge(isCityMode) {
     document.getElementById('dailyMsg').textContent = '';
     document.getElementById('dailyInput').value = '';
     document.getElementById('dailyInput').focus();
+
+    // 重置每日挑战面板为展开
+    const dailyContent = document.getElementById('dailyContent');
+    const toggleBtn = document.getElementById('toggleDailyBtn');
+    if (dailyContent) dailyContent.style.display = 'block';
+    if (toggleBtn) toggleBtn.textContent = '收起';
 
     loadDailyQuestion();
 }
@@ -736,6 +742,7 @@ function exitDailyChallenge() {
     dailyCityMode = false;
 
     document.getElementById('dailyPanel').style.display = 'none';
+    document.getElementById('panel').style.display = 'block';
     document.getElementById('panelContent').style.display = 'block';
 
     document.getElementById('dailyInput').disabled = false;
