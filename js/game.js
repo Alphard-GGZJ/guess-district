@@ -222,7 +222,11 @@ const aliasMap = buildAliasMap();
 (function forceFixAliases() {
     aliasMap['六枝特区'] = ['六枝特区', '六枝'];
 aliasMap['大柴旦行政委员会'] = ['大柴旦行政委员会', '大柴旦'];
-    
+        // 民族区（X族区，非自治）
+    aliasMap['瀍河回族区'] = ['瀍河回族区', '瀍河', '瀍河区'];
+    aliasMap['顺河回族区'] = ['顺河回族区', '顺河', '顺河区'];
+    aliasMap['管城回族区'] = ['管城回族区', '管城', '管城区'];
+    aliasMap['梅里斯达斡尔族区'] = ['梅里斯达斡尔族区', '梅里斯', '梅里斯区'];
     // 👇 在这里添加
     const newAreaMap = {
         '浦东新区': '浦东',
@@ -348,6 +352,7 @@ function fixAutonomousAliases() {
 }
 
 fixAutonomousAliases();
+aliasMap['融水苗族自治县'] = ['融水苗族自治县', '融水', '融水县'];
 
 function matchDistrict(input) {
     const exact = [];
