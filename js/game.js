@@ -1190,7 +1190,7 @@ function loadDistrict(name) {
     clearMap();
     const tl = ++loadId;
 
-    if (gameMode === 'easy') {
+    if (gameMode === 'easy' && !dailyMode) {
         dsProvince.search(name, (status, result) => {
             if (tl !== loadId) return;
             if (status === 'complete' && result.districtList.length > 0) {
@@ -1202,7 +1202,7 @@ function loadDistrict(name) {
         return;
     }
 
-    if (gameMode === 'normal') {
+    if (gameMode === 'normal' && !dailyMode) {
         dsCity.search(name, (status, result) => {
             if (tl !== loadId) return;
             if (status === 'complete' && result.districtList.length > 0) {
