@@ -658,3 +658,7 @@ body {
     user-select: none;
     font-family: "Microsoft YaHei", Arial, sans-serif;
 }
+
+#reloadBtn:active {
+    transform: scale(0.94);
+}
