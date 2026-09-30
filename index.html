@@ -72,9 +72,6 @@
         <button id="submitBtn">猜！</button>
         <button id="newBtn">🔄 换一个</button>
         <div id="msg"></div>
-<div style="text-align:center;margin-top:6px;">
-    <button id="reloadBtn" type="button" style="font-size:12px;padding:4px 12px;background:#f0f0f0;border:1px solid #ccc;border-radius:4px;cursor:pointer;color:#666;">🔄 重新加载地图</button>
-</div>
         <div id="score">得分: 0</div>
         <div id="bestScore">🏆 最高分: 0</div>
 <div id="hint">💡 提示</div>
@@ -177,6 +174,9 @@
 
 <div id="map"></div>
 <div id="watermark">Alphard_改革则吉ver</div>
+
+<!-- 全局重新加载按钮（所有模式共用） -->
+<button id="reloadBtn" type="button" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:99999;font-size:13px;padding:6px 16px;background:rgba(255,255,255,0.95);border:1px solid #ccc;border-radius:20px;cursor:pointer;color:#666;box-shadow:0 2px 8px rgba(0,0,0,0.15);">🔄 重新加载地图</button>
 
     <!-- 1. 先加载配置文件 -->
     <script src="js/config.js"></script>
