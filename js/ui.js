@@ -9,6 +9,7 @@ function setMsg(text, className) {
 }
 
 function bindUI() {
+    document.getElementById('reloadBtn').addEventListener('click', reloadCurrentMap);
     document.getElementById('battleCollapseBtn').addEventListener('click', toggleBattleCollapse);
         document.getElementById('btnBattle').addEventListener('click', openBattlePanel);
     document.getElementById('btnBattleExit').addEventListener('click', closeBattlePanel);
@@ -187,6 +188,8 @@ function initSpeedSetting() {
 }
 
 function setMode(mode) {
+    lastLoadRequest = null;
+
     // 计时模式开启时禁止切换难度
     if (timerMode) {
         setMsg('⏱ 计时中，不能切换模式', '');
@@ -904,6 +907,8 @@ const battleDistrictCache = {};
 // 加载对决战地图
 function loadBattleDistrict(name) {
     if (!name) return;
+    
+    lastLoadRequest = { type: 'battle', name: name };
     
     const baseName = name.replace(/（.+?）$/, '');
     

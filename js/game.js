@@ -8,6 +8,8 @@ let dsProvince;
 let dsCity;
 
 let targetDistrict = null;
+let lastLoadRequest = null;
+let reloadLock = false;
 let currentPolygons = [];
 let classicNeighborPolygons = [];
 
@@ -1179,6 +1181,7 @@ function drawNeighborsOnCanvas(neighborData, targetDistrict) {
 }
 
 function loadDistrict(name) {
+    lastLoadRequest = { type: 'district', name: name };
     // 检查搜索对象是否已创建
     if (!ds || !dsCity || !dsProvince) {
         console.warn('搜索对象未初始化，等待...');
@@ -1278,6 +1281,7 @@ function loadDistrict(name) {
 }
 
 function loadDailyCity(name) {
+    lastLoadRequest = { type: 'city', name: name };
     if (!ds || !dsCity) {
         setTimeout(() => loadDailyCity(name), 500);
         return;
@@ -1299,6 +1303,39 @@ function loadDailyCity(name) {
             setMsg('加载失败，换一个', 'wrong');
         }
     });
+}
+
+function reloadCurrentMap() {
+    if (reloadLock) return;
+    reloadLock = true;
+    setTimeout(() => { reloadLock = false; }, 500);
+
+    playSound('click');
+
+    // 好友对战：重载对战地图
+    if (typeof battleRoomId !== 'undefined' && battleRoomId) {
+        if (typeof battleLastQuestion !== 'undefined' && battleLastQuestion) {
+            loadBattleDistrict(battleLastQuestion);
+        } else if (typeof battleCurrentDisplayed !== 'undefined' && battleCurrentDisplayed) {
+            loadBattleDistrict(battleCurrentDisplayed);
+        }
+        return;
+    }
+
+    // 每日挑战：重载当前题
+    if (dailyMode) {
+        loadDailyQuestion();
+        return;
+    }
+
+    // 正常答题：用 lastLoadRequest
+    if (!lastLoadRequest) return;
+
+    if (lastLoadRequest.type === 'city') {
+        loadDailyCity(lastLoadRequest.name);
+    } else {
+        loadDistrict(lastLoadRequest.name);
+    }
 }
 
 function getCitiesByProvince(province) {
