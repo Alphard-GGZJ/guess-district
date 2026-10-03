@@ -56,7 +56,7 @@
 #homeMenu {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
     width: 300px;
 }
 
@@ -88,6 +88,21 @@
 
 #homeMenu #homeBtnQuiz {
     background: linear-gradient(135deg, #10b981, #34d399);
+    color: white;
+}
+
+#homeMenu #homeBtnDaily {
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    color: white;
+}
+
+#homeMenu #homeBtnMiniGames {
+    background: linear-gradient(135deg, #06b6d4, #22d3ee);
+    color: white;
+}
+
+#homeMenu #homeBtnBattle {
+    background: linear-gradient(135deg, #ef4444, #f87171);
     color: white;
 }
 
@@ -137,10 +152,12 @@ html, body {
     width: 380px;
     max-height: calc(100vh - 20px);
     overflow-y: auto;
+    overflow-x: hidden;
     box-sizing: border-box;
     visibility: hidden;
     opacity: 0;
     transition: opacity 0.3s ease;
+    scrollbar-gutter: stable;
 }
 
 #panel.visible {
@@ -167,6 +184,22 @@ html, body {
     background: #ccc;
     cursor: pointer;
     vertical-align: middle;
+}
+
+#backHomeBtn {
+    font-size: 11px;
+    padding: 3px 8px;
+    margin-left: 6px;
+    border-radius: 4px;
+    border: none;
+    background: #e5e7eb;
+    color: black;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+#backHomeBtn:hover {
+    background: #d1d5db;
 }
 
 #toggleDailyBtn:hover {
@@ -656,11 +689,6 @@ body {
     transition: all 0.2s ease;
 }
 
-#miniGamesPanel button:hover {
-    transform: scale(1.03);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-}
-
 #miniGamesPanel button:active {
     transform: scale(0.95);
 }
@@ -727,22 +755,12 @@ body {
     transition: all 0.2s ease;
 }
 
-#battlePanel button:hover {
-    transform: scale(1.03);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-}
-
 #battlePanel button:active {
     transform: scale(0.95);
 }
 
 #battleRoomPanel button {
     transition: all 0.2s ease;
-}
-
-#battleRoomPanel button:hover {
-    transform: scale(1.03);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 
 #battleRoomPanel button:active {
@@ -760,6 +778,22 @@ body {
     transform: translate(-50%, -50%) scale(0.85);
 }
 
+#dailyModePopup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.85);
+    opacity: 0;
+    will-change: opacity, transform;
+    transform-origin: center center;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#dailyModePopup.daily-popup-visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
 #watermark {
     position: fixed;
     bottom: 10px;
@@ -774,4 +808,49 @@ body {
 
 #reloadBtn:active {
     transform: scale(0.94);
+}
+
+#quizPanel {
+    transform-origin: top left;
+}
+
+/* ==================== 全局按钮动效与浅色反馈 ==================== */
+button {
+    transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+button:hover {
+    transform: translateY(-1px) scale(1.03);
+    filter: brightness(1.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+button:active {
+    transform: scale(0.95);
+    filter: brightness(0.96);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+button:focus-visible {
+    outline: 2px solid #4a6cf7;
+    outline-offset: 2px;
+}
+
+/* 深色/彩色按钮悬停时轻微变浅，浅色按钮悬停时轻微加深，保持整体协调 */
+#panel button:hover,
+#dailyPanel button:hover,
+#miniGamesPanel button:hover,
+#battlePanel button:hover,
+#battleRoomPanel button:hover {
+    filter: brightness(1.12);
+}
+
+/* 首页菜单按钮保留更明显的上浮与阴影 */
+#homeMenu button:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+#homeMenu button:active {
+    transform: scale(0.97);
 }
