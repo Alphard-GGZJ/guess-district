@@ -15,6 +15,9 @@
     <div id="homeMenu">
         <button id="homeBtnPlay">🎮 看图猜区县</button>
         <button id="homeBtnQuiz">📝 出题模式</button>
+        <button id="homeBtnDaily">📅 每日挑战</button>
+        <button id="homeBtnMiniGames">🎮 小游戏</button>
+        <button id="homeBtnBattle">⚔️ 好友对决</button>
     </div>
 </div>
 
@@ -24,6 +27,7 @@
 <div id="panel">
     <h3>
         🗺️ 看图猜区县
+        <button id="backHomeBtn" type="button">🏠 主界面</button>
         <button id="togglePanelBtn" type="button" onclick="togglePanel()">收起</button>
     </h3>
 
@@ -33,11 +37,7 @@
             <button id="btnNormal">中等</button>
             <button id="btnHard">困难</button>
             <button id="btnClassic">经典</button>
-<button id="btnDaily">📅 每日挑战（县级）</button>
-<button id="btnDailyCity">🏙️ 每日挑战（地级）</button>
 <button id="btnTimer">⏱ 计时</button>
-<button id="btnMiniGames">🎮 小游戏</button>
-<button id="btnBattle">⚔️ 好友对决</button>
         </div>
         <div id="timerDisplay"></div>
         <div>
@@ -157,6 +157,79 @@
     <button id="btnBattleExit" style="display:block;width:100%;margin:10px 0;padding:10px;background:#ccc;color:black;border:none;border-radius:8px;cursor:pointer;">退出</button>
 </div>
 
+<div id="quizPanel" style="display:none;position:fixed;top:10px;left:10px;z-index:9999;background:white;padding:16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.3);font-size:13px;width:340px;max-height:calc(100vh - 20px);overflow-y:auto;">
+        <h3 style="text-align:center;margin-bottom:10px;font-size:15px;">📝 出题模式</h3>
+
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input type="text" id="quizQueryInput" placeholder="输入区县名..." autocomplete="off" style="flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:5px;font-size:13px;">
+        <button id="quizQueryBtn" style="padding:6px 12px;border:none;border-radius:5px;background:#4a6cf7;color:white;cursor:pointer;font-size:13px;">查询</button>
+    </div>
+    <div style="font-size:11px;color:#999;margin-bottom:8px;">💡 示例：<code>东城区</code>、<code>市中区（内江市）</code>、<code>城区（汕尾市）</code></div>
+
+    <div style="font-weight:bold;font-size:13px;margin:10px 0 6px;padding-bottom:4px;border-bottom:1px solid #eee;">已添加区域</div>
+    <div id="quizRegionList"></div>
+
+    <div style="font-weight:bold;font-size:13px;margin:10px 0 6px;padding-bottom:4px;border-bottom:1px solid #eee;">全局设置</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+        <label style="flex:0 0 80px;color:#666;font-size:12px;">初始数字字号</label>
+        <input type="number" id="quizFontSize" min="0" value="24" style="flex:1;padding:4px 6px;border:1px solid #ccc;border-radius:5px;font-size:13px;">
+        <span id="quizFontSizeVal" style="width:30px;text-align:right;font-size:12px;">24</span>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+        <label style="flex:0 0 80px;color:#666;font-size:12px;">初始填充色</label>
+        <input type="color" id="quizDefaultFill" value="#FF0000" style="flex:1;height:28px;border:1px solid #ccc;border-radius:5px;cursor:pointer;">
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+        <label style="flex:0 0 80px;color:#666;font-size:12px;">初始边框色</label>
+        <input type="color" id="quizDefaultBorder" value="#000000" style="flex:1;height:28px;border:1px solid #ccc;border-radius:5px;cursor:pointer;">
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+        <label style="flex:0 0 80px;color:#666;font-size:12px;">初始数字颜色</label>
+        <input type="color" id="quizDefaultNumColor" value="#FF0000" style="flex:1;height:28px;border:1px solid #ccc;border-radius:5px;cursor:pointer;">
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+        <label style="flex:0 0 80px;color:#666;font-size:12px;">显示区县名</label>
+        <input type="checkbox" id="quizShowNames" style="cursor:pointer;transform:scale(1.3);">
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+        <label style="flex:0 0 80px;color:#666;font-size:12px;">初始名称字号</label>
+        <input type="number" id="quizNameFontSize" min="0" value="14" style="flex:1;padding:4px 6px;border:1px solid #ccc;border-radius:5px;font-size:13px;">
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+        <label style="flex:0 0 80px;color:#666;font-size:12px;">初始名称颜色</label>
+        <input type="color" id="quizNameColor" value="#333333" style="flex:1;height:28px;border:1px solid #ccc;border-radius:5px;cursor:pointer;">
+    </div>
+
+    <div style="font-weight:bold;font-size:13px;margin:10px 0 6px;padding-bottom:4px;border-bottom:1px solid #eee;">文字标注（保存时加到左上角）</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+        <label style="flex:0 0 80px;color:#666;font-size:12px;">字号</label>
+        <input type="number" id="quizTextFontSize" min="0" value="24" style="flex:1;padding:4px 6px;border:1px solid #ccc;border-radius:5px;font-size:13px;">
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+        <label style="flex:0 0 80px;color:#666;font-size:12px;">颜色</label>
+        <input type="color" id="quizTextColor" value="#000000" style="flex:1;height:28px;border:1px solid #ccc;border-radius:5px;cursor:pointer;">
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:flex-start;">
+        <label style="flex:0 0 80px;color:#666;font-size:12px;padding-top:4px;">内容</label>
+        <textarea id="quizTextContent" placeholder="每行一段文字" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:5px;font-size:13px;min-height:60px;resize:vertical;font-family:inherit;"></textarea>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-top:8px;">
+        <button id="quizPreviewBtn" style="flex:1;padding:8px;border:none;border-radius:6px;background:#4a6cf7;color:white;cursor:pointer;font-size:13px;">👁️ 预览</button>
+        <button id="quizSaveBtn" style="flex:1;padding:8px;border:none;border-radius:6px;background:#10b981;color:white;cursor:pointer;font-size:13px;">💾 保存图片</button>
+        <button id="quizClearBtn" style="flex:1;padding:8px;border:none;border-radius:6px;background:#ef4444;color:white;cursor:pointer;font-size:13px;">🗑️ 清空</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+        <button id="quizExitBtn" style="flex:1;padding:8px;border:none;border-radius:6px;background:#ccc;color:#333;cursor:pointer;font-size:13px;">退出出题模式</button>
+    </div>
+</div>
+
 <div id="battleRoomPanel" style="display:none;">
     <h3>⚔️ 对战房间 <button id="battleCollapseBtn" style="font-size:11px;padding:2px 6px;margin-left:5px;background:#ccc;border:none;border-radius:4px;cursor:pointer;">收起</button></h3>
     <div id="battleRoomInfo"></div>
@@ -168,8 +241,15 @@
     <button id="btnBattleLeave" style="display:block;width:100%;margin:10px 0;padding:10px;background:#ef4444;color:white;border:none;border-radius:8px;cursor:pointer;">离开房间</button>
 </div>
 
+<div id="dailyModePopup" style="display:none;background:white;padding:24px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:9999999;max-width:320px;width:80vw;">
+            <b style="display:block;text-align:center;margin-bottom:16px;font-size:16px;">📅 选择挑战级别</b>
+    <button id="dailyModeDistrict" style="display:block;width:100%;margin:6px 0;padding:14px;background:#4a6cf7;color:white;border:none;border-radius:8px;cursor:pointer;font-size:15px;">🏘️ 县级挑战</button>
+    <button id="dailyModeCity" style="display:block;width:100%;margin:6px 0;padding:14px;background:#8b5cf6;color:white;border:none;border-radius:8px;cursor:pointer;font-size:15px;">🏙️ 地级挑战</button>
+    <button id="dailyModeCancel" style="display:block;width:100%;margin:10px 0 0;padding:10px;background:#ccc;color:black;border:none;border-radius:8px;cursor:pointer;font-size:14px;">主界面</button>
+</div>
+
 <div id="helpPopup" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:9999;max-width:320px;">
-    <b>📖 输入规则</b>
+        <b>📖 输入规则</b>
     <ul style="padding-left:18px;margin-top:8px;">
         <li>兼容简称，如“新疆”</li>
         <li>也可输入完整名称，如“新疆维吾尔自治区”</li>
