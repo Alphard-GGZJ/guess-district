@@ -1548,10 +1548,25 @@ battleSubmitLock = false;
                 break;
             }
         }
+    }
+    
+    // 未匹配 → 检查是否重名
+    if (!correct) {
+        const possible = Object.keys(ADJACENCY).filter(name => {
+            const aliases = aliasMap[name] || [name];
+            return aliases.includes(input) ||
+                   aliases.includes(input + '区') ||
+                   aliases.includes(input + '县') ||
+                   aliases.includes(input + '市');
+        });
         
-        if (!correct && targetBase === input) {
-            correct = true;
-            correctName = targetName;
+        if (possible.length > 1) {
+            document.getElementById('battleQuestion').textContent = '⚠️ 请输入更完整名称';
+            battleAnswered = false;
+            battleSubmitLock = false;
+            document.getElementById('battleSubmitBtn').disabled = false;
+            document.getElementById('battleInput').disabled = false;
+            return;
         }
     }
     
