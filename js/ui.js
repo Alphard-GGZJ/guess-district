@@ -1334,19 +1334,20 @@ function handleBattleUpdate(roomData) {
             }
 
             // 题目变化
-            if (roomData.current_question && roomData.current_question !== battleCurrentDisplayed) {
-                battleLastQuestion = roomData.current_question;
-                battleGameStarted = true;
-                battleQuestionLoaded = true;
-                battleAnswered = false;
-                battleSubmitLock = false;
-                document.getElementById('battleInput').value = '';
-                document.getElementById('battleInput').disabled = false;
-                document.getElementById('battleSubmitBtn').disabled = false;
-                document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
-                document.getElementById('battleGiveUpBtn').disabled = false;
-                loadBattleDistrict(roomData.current_question);
-            }
+if (roomData.current_question && roomData.current_question !== battleCurrentDisplayed) {
+    battleLastQuestion = roomData.current_question;
+    battleGameStarted = true;
+    battleQuestionLoaded = true;
+    battleAnswered = false;
+    battleSubmitLock = false;
+    battleQuestionIndex = roomData.question_seq || battleQuestionIndex;   // ← 同步题号
+    document.getElementById('battleInput').value = '';
+    document.getElementById('battleInput').disabled = false;
+    document.getElementById('battleSubmitBtn').disabled = false;
+    document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
+    document.getElementById('battleGiveUpBtn').disabled = false;
+    loadBattleDistrict(roomData.current_question);
+}
         }
 
     } else if (roomData.status === 'finished') {
@@ -1378,18 +1379,20 @@ async function startRaceQuestion() {
 
     const { data } = await supabaseClient
         .from('battle_rooms')
-        .select('current_question')
+        .select('current_question, question_seq')
         .eq('id', battleRoomId)
         .single();
 
     if (data && data.current_question) return;
 
     if (battlePlayerNumber === 1) {
+        battleQuestionIndex = (data?.question_seq || 0) + 1;
         const firstQ = getRandomBattleQuestion();
         await supabaseClient
             .from('battle_rooms')
             .update({
                 current_question: firstQ,
+                question_seq: battleQuestionIndex,   // ← 同步
                 player1_giveup: false,
                 player2_giveup: false
             })
@@ -1511,18 +1514,28 @@ battleSubmitLock = false;
                 battleSubmitLock = false;
                 generateOwnQuestion();
             }, 800);
-        } else {
-            const nextQ = getRandomBattleQuestion();
-            battleLastQuestion = nextQ;
-            await supabaseClient
-                .from('battle_rooms')
-                .update({
-                    current_question: nextQ,
-                    player1_giveup: false,
-                    player2_giveup: false
-                })
-                .eq('id', battleRoomId);
-        }
+} else {
+    // 从服务器读题号并 +1
+    const { data: room2 } = await supabaseClient
+        .from('battle_rooms')
+        .select('question_seq')
+        .eq('id', battleRoomId)
+        .single();
+    
+    battleQuestionIndex = (room2?.question_seq || 0) + 1;
+    const nextQ = getRandomBattleQuestion();
+    battleLastQuestion = nextQ;
+    
+    await supabaseClient
+        .from('battle_rooms')
+        .update({
+            current_question: nextQ,
+            question_seq: battleQuestionIndex,   // ← 同步写回
+            player1_giveup: false,
+            player2_giveup: false
+        })
+        .eq('id', battleRoomId);
+}
     } else {
         playSound('wrong');
         document.getElementById('battleQuestion').textContent = '❌ 再试试！';
