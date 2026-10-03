@@ -1349,42 +1349,42 @@ function handleBattleUpdate(roomData) {
             if (totalScore > battleLastTotalScore) {
                 battleLastTotalScore = totalScore;
             }
-            // 对方已占坑 → 锁定自己输入
-            if (roomData.last_winner && roomData.last_winner !== battlePlayerName && roomData.current_question === battleCurrentDisplayed) {
-                document.getElementById('battleInput').disabled = true;
-                document.getElementById('battleSubmitBtn').disabled = true;
-                document.getElementById('battleQuestion').textContent = '⏳ 对方已答对，等待下一题...';
-            }
-
-            // 未开局
+            // 未开局 或 题目被清空 → 房主出下一题
             if (!roomData.current_question && !roomData.player1_giveup && !roomData.player2_giveup) {
-                if (battlePlayerNumber === 1 && roomData.player2 && !battleGameStarted) {
-                    battleGameStarted = true;
+                if (battlePlayerNumber === 1) {
                     document.getElementById('battleInput').disabled = true;
-                    document.getElementById('battleQuestion').textContent = '⏳ 准备出题...';
-                    startRaceQuestion();
-                } else if (battlePlayerNumber !== 1) {
+                    document.getElementById('battleSubmitBtn').disabled = true;
+                    document.getElementById('battleQuestion').textContent = '⏳ 出题中...';
+                    if (!window._makingQuestion) {
+                        window._makingQuestion = true;
+                        setTimeout(async () => {
+                            window._makingQuestion = false;
+                            await startRaceQuestion();
+                        }, 500);
+                    }
+                } else {
                     document.getElementById('battleInput').disabled = true;
+                    document.getElementById('battleSubmitBtn').disabled = true;
                     document.getElementById('battleQuestion').textContent = '⏳ 等待对手出题...';
                 }
                 return;
             }
 
-            // 题目变化
-if (roomData.current_question && roomData.current_question !== battleCurrentDisplayed) {
-    battleLastQuestion = roomData.current_question;
-    battleGameStarted = true;
-    battleQuestionLoaded = true;
-    battleAnswered = false;
-    battleSubmitLock = false;
-    battleQuestionIndex = roomData.question_seq || battleQuestionIndex;   // ← 同步题号
-    document.getElementById('battleInput').value = '';
-    document.getElementById('battleInput').disabled = false;
-    document.getElementById('battleSubmitBtn').disabled = false;
-    document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
-    document.getElementById('battleGiveUpBtn').disabled = false;
-    loadBattleDistrict(roomData.current_question);
-}
+            // 题目变化 → 加载
+            if (roomData.current_question && roomData.current_question !== battleCurrentDisplayed) {
+                battleLastQuestion = roomData.current_question;
+                battleGameStarted = true;
+                battleQuestionLoaded = true;
+                battleAnswered = false;
+                battleSubmitLock = false;
+                battleQuestionIndex = roomData.question_seq || battleQuestionIndex;
+                document.getElementById('battleInput').value = '';
+                document.getElementById('battleInput').disabled = false;
+                document.getElementById('battleSubmitBtn').disabled = false;
+                document.getElementById('battleQuestion').textContent = battleRange === 'city' ? '请猜地级市' : '请猜区县';
+                document.getElementById('battleGiveUpBtn').disabled = false;
+                loadBattleDistrict(roomData.current_question);
+            }
         }
 
     } else if (roomData.status === 'finished') {
@@ -1413,7 +1413,7 @@ if (roomData.current_question && roomData.current_question !== battleCurrentDisp
 // ==================== 模式1：竞速对决 ====================
 async function startRaceQuestion() {
     if (!supabaseClient || !battleRoomId) return;
-    if (battlePlayerNumber !== 1) return;   // 只有房主出题
+    if (battlePlayerNumber !== 1) return;
 
     const { data } = await supabaseClient
         .from('battle_rooms')
@@ -1430,7 +1430,6 @@ async function startRaceQuestion() {
         .update({
             current_question: firstQ,
             question_seq: battleQuestionIndex,
-            last_winner: null,
             player1_giveup: false,
             player2_giveup: false
         })
@@ -1549,61 +1548,19 @@ battleSubmitLock = false;
         // 本地也记一份（用于复盘兜底）
         battleHistory.push(record);
         
-        // 立即占坑：标记自己为本题胜者
-        await supabaseClient
-            .from('battle_rooms')
-            .update({ last_winner: battlePlayerName })
-            .eq('id', battleRoomId)
-            .eq('current_question', targetName)
-            .is('last_winner', null);
-        
         await addBattleScore();
         
-        if (data.mode === 'score') {
-            setTimeout(() => {
-                battleAnswered = false;
-                battleSubmitLock = false;
-                generateOwnQuestion();
-            }, 800);
         } else {
-            // 竞速模式：占坑成功者写下一题
-            const oldQ = targetName;
-            
-            const { data: room2 } = await supabaseClient
-                .from('battle_rooms')
-                .select('question_seq, current_question, last_winner')
-                .eq('id', battleRoomId)
-                .single();
-            
-            // 检查是否是自己占的坑
-            const iWonThisRound = room2 && room2.last_winner === battlePlayerName && room2.current_question === oldQ;
-            
-            if (!iWonThisRound) {
-                // 对方先占坑 → 回滚自己刚加的分
-                const rollbackField = battlePlayerNumber === 1 ? 'player1_score' : 'player2_score';
-                await supabaseClient.rpc('decrement_score', {
-                    room_id: battleRoomId,
-                    score_field: rollbackField
-                }).catch(() => {});
-                return;
-            }
-            
-            const nextSeq = (room2.question_seq || 0) + 1;
-            battleQuestionIndex = nextSeq;
-            const nextQ = getRandomBattleQuestion();
-            
+            // 竞速模式：谁答对谁清空题目，房主出下一题
             await supabaseClient
                 .from('battle_rooms')
                 .update({
-                    current_question: nextQ,
-                    question_seq: nextSeq,
-                    last_winner: null,
+                    current_question: null,
                     player1_giveup: false,
                     player2_giveup: false
                 })
                 .eq('id', battleRoomId)
-                .eq('current_question', oldQ)
-                .eq('last_winner', battlePlayerName);
+                .eq('current_question', targetName);
         }
     } else {
         playSound('wrong');
@@ -1874,20 +1831,14 @@ async function giveUpBattle() {
         .single();
     
     if (current && current[otherField]) {
-        // 双方都放弃 → 换新题（不加分）
+        // 双方都放弃 → 清空题目，房主出下一题
         document.getElementById('battleQuestion').textContent = '🏳️ 双方都放弃，换新题...';
-        
-        const nextSeq = (current.question_seq || 0) + 1;
-        battleQuestionIndex = nextSeq;
-        const nextQ = getRandomBattleQuestion();
         
         await supabaseClient
             .from('battle_rooms')
             .update({
                 [field]: true,
-                current_question: nextQ,
-                question_seq: nextSeq,
-                last_winner: null,
+                current_question: null,
                 player1_giveup: false,
                 player2_giveup: false
             })
