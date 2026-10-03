@@ -521,9 +521,11 @@ function initMap() {
                         extensions: 'all'
                     });
 
-                    
-                    // 搜索对象创建完成后设置模式
-                    setMode('normal');
+                    // 构建 名称→adcode 反查表（一次，后台异步）
+                    buildDistrictAdcodeIndex().then(() => {
+                        // 搜索对象创建完成后设置模式
+                        setMode('normal');
+                    });
                 } catch (e) {
                     setMsg('❌ 地图搜索功能初始化失败，请刷新重试', 'wrong');
                 }
@@ -637,6 +639,8 @@ function getDailyCityQuestions() {
 }
 
 function startDailyChallenge(isCityMode) {
+    if (typeof quizCleanup === 'function') quizCleanup();
+
     if (gameMode === 'classic' && document.getElementById('newBtn').disabled) {
         setMsg('⏳ 经典模式加载中，请稍候', '');
         return;
@@ -755,14 +759,22 @@ function exitDailyChallenge() {
     dailyCityMode = false;
 
     document.getElementById('dailyPanel').style.display = 'none';
-    document.getElementById('panel').style.display = 'block';
-    document.getElementById('panelContent').style.display = 'block';
+    document.getElementById('panel').style.display = 'none';
+    document.getElementById('map').classList.remove('visible');
+    const rb = document.getElementById('reloadBtn');
+    if (rb) {
+        rb.style.visibility = 'hidden';
+        rb.style.opacity = '0';
+    }
 
     document.getElementById('dailyInput').disabled = false;
     document.getElementById('dailySubmitBtn').disabled = false;
 
-    if (map) {
-        newRound();
+    // 返回选择挑战模式弹窗（带淡入动画）
+    if (typeof showDailyModePopup === 'function') {
+        showDailyModePopup();
+    } else {
+        document.getElementById('dailyModePopup').style.display = 'block';
     }
 }
 
@@ -1181,7 +1193,100 @@ function drawNeighborsOnCanvas(neighborData, targetDistrict) {
     
 }
 
+// ==================== 行政区名 → adcode 反查 ====================
+const districtAdcodeIndex = {};   // key: 规范名（含括号）  value: adcode
+
+let _districtAdcodeIndexReady = null;
+function buildDistrictAdcodeIndex() {
+    if (_districtAdcodeIndexReady) return _districtAdcodeIndexReady;
+
+    _districtAdcodeIndexReady = new Promise((resolve) => {
+        const provinces = [
+            '北京','天津','河北','山西','内蒙古','辽宁','吉林','黑龙江',
+            '上海','江苏','浙江','安徽','福建','江西','山东','河南',
+            '湖北','湖南','广东','广西','海南','重庆','四川','贵州',
+            '云南','西藏','陕西','甘肃','青海','宁夏','新疆'
+        ];
+
+        let pending = provinces.length;
+        if (pending === 0) { resolve(); return; }
+
+        provinces.forEach(prov => {
+            dsProvince.search(prov, (status, result) => {
+                try {
+                    if (status === 'complete' && result.districtList && result.districtList.length > 0) {
+                        walkDistrictTree(result.districtList, null);
+                    }
+                } catch (e) {
+                    console.warn('构建 adcode 索引失败：', prov, e);
+                }
+                pending--;
+                if (pending <= 0) resolve();
+            });
+        });
+    });
+
+    return _districtAdcodeIndexReady;
+}
+
+function walkDistrictTree(list, parentName) {
+    list.forEach(d => {
+        if (!d || !d.name) return;
+
+        // 有同名风险时，存两种 key：纯名 和 带括号
+        // 纯名只在该名字唯一时写入，避免覆盖
+        if (!districtAdcodeIndex[d.name]) {
+            districtAdcodeIndex[d.name] = d.adcode;
+        } else {
+            // 已有同名，标记为冲突，后续用带括号 key 区分
+            districtAdcodeIndex['__conflict__' + d.name] = true;
+        }
+
+        if (parentName) {
+            districtAdcodeIndex[`${d.name}（${parentName}）`] = d.adcode;
+        }
+
+        if (d.districtList && d.districtList.length > 0) {
+            walkDistrictTree(d.districtList, d.name);
+        }
+    });
+}
+
+// 按规范名取 adcode：优先带括号，其次纯名（且非冲突）
+function getAdcodeByName(name) {
+    // 索引不可靠，直接返回 null，走名字搜索
+    return null;
+}
+
+// 短名 / 重名风险名的 adcode 白名单
+const SHORT_NAME_ADCODE = {
+    '宁县': ['621026'],
+    '西区': ['510403'],
+    '东区': ['510402'],
+    '洋县': ['610723'],
+    '兴县': ['141123'],
+    '新县': ['411523'],
+    '南县': ['430921'],
+    '矿区': ['140303'],
+    '城区（阳泉市）': ['140302'],
+    '城区（晋城市）': ['140502'],
+    '城区（汕尾市）': ['441502'],
+    '郊区（阳泉市）': ['140311'],
+    '郊区（佳木斯市）': ['230811'],
+    '郊区（铜陵市）': ['340711'],
+    '东区（攀枝花市）': ['510402'],
+    '市中区（济南市）': ['370103'],
+    '市中区（枣庄市）': ['370402'],
+    '市中区（内江市）': ['511002'],
+    '市中区（乐山市）': ['511102'],
+    '大柴旦行政委员会': ['632825'],
+};
+
 function loadDistrict(name) {
+    // 特例：高德返回"海西蒙古族藏族自治州直辖"，统一用"大柴旦行政委员会"
+    if (name === '海西蒙古族藏族自治州直辖') {
+        name = '大柴旦行政委员会';
+    }
     lastLoadRequest = { type: 'district', name: name };
     // 检查搜索对象是否已创建
     if (!ds || !dsCity || !dsProvince) {
@@ -1223,62 +1328,91 @@ function loadDistrict(name) {
         return;
     }
 
-    // 困难 / 经典 / 每日挑战
-    const bm = name.match(/（(.+?)）$/);
-    const baseName = bm ? name.replace(/（.+?）$/, '') : name;
-    const parentName = bm ? bm[1] : null;
-
-    function searchWithRetry(retryCount) {
-        ds.search(baseName, (status, result) => {
+    // 短名白名单：优先用已知 adcode 精确定位
+    const whitelistAdcodes = SHORT_NAME_ADCODE[name];
+    if (whitelistAdcodes && whitelistAdcodes.length > 0) {
+        ds.search(whitelistAdcodes[0], (status, result) => {
             if (tl !== loadId) return;
 
-            if (status !== 'complete' || result.districtList.length === 0) {
-                if (retryCount > 0) {
-                    setTimeout(() => searchWithRetry(retryCount - 1), 500);
+            if (status === 'complete' && result.districtList.length > 0) {
+                const d = result.districtList.find(x => x.level === 'district') || result.districtList[0];
+                if (d) {
+                    showDistrict(d);
+                    if (gameMode === 'classic' && !dailyMode) {
+                        setTimeout(() => loadNeighborDistricts(d.adcode), 200);
+                    }
                     return;
                 }
-                setMsg('加载失败，换一个', 'wrong');
-                return;
             }
 
-            let d;
-
-            if (parentName) {
-                d = result.districtList.find(x => {
-                    if (x.level !== 'district') return false;
-                    const city = getCityName(x.adcode);
-                    return city.includes(parentName) || parentName.includes(city);
-                });
-            }
-
-            if (!d) {
-                d = result.districtList.find(x => x.name === baseName && x.level === 'district');
-            }
-
-            if (!d) {
-                d = result.districtList.find(x => x.level === 'district');
-            }
-
-            if (!d) {
-                if (retryCount > 0) {
-                    setTimeout(() => searchWithRetry(retryCount - 1), 500);
-                    return;
-                }
-                newRound();
-                return;
-            }
-
-            showDistrict(d);
-
-            if (gameMode === 'classic' && !dailyMode) {
-                setTimeout(() => {
-                    loadNeighborDistricts(d.adcode);
-                }, 200);
-            }
+            // adcode 搜索失败 → 退回名字搜索
+            searchByName(name, tl);
         });
+        return;
     }
 
-    searchWithRetry(3);
+    // 没有反查到 adcode：退回原来的名字搜索逻辑
+    searchByName(name, tl);
+
+    function searchByName(name, tl) {
+        const bm = name.match(/（(.+?)）$/);
+        const baseName = bm ? name.replace(/（.+?）$/, '') : name;
+        const parentName = bm ? bm[1] : null;
+
+        function searchWithRetry(retryCount) {
+            ds.search(baseName, (status, result) => {
+                if (tl !== loadId) return;
+
+                if (status !== 'complete' || result.districtList.length === 0) {
+                    if (retryCount > 0) {
+                        setTimeout(() => searchWithRetry(retryCount - 1), 500);
+                        return;
+                    }
+                    setMsg('加载失败，换一个', 'wrong');
+                    return;
+                }
+
+                let d;
+
+                // 优先级：名称完全相等 > parentName 匹配 > 第一个 district
+                if (parentName) {
+                    d = result.districtList.find(x => {
+                        if (x.level !== 'district') return false;
+                        if (x.name !== baseName) return false;
+                        const city = getCityName(x.adcode);
+                        return city.includes(parentName) || parentName.includes(city);
+                    });
+                }
+
+                if (!d) {
+                    d = result.districtList.find(x => x.name === baseName && x.level === 'district');
+                }
+
+                if (!d) {
+                    d = result.districtList.find(x => x.level === 'district');
+                }
+
+                if (!d) {
+                    if (retryCount > 0) {
+                        setTimeout(() => searchWithRetry(retryCount - 1), 500);
+                        return;
+                    }
+                    newRound();
+                    return;
+                }
+
+                showDistrict(d);
+
+                if (gameMode === 'classic' && !dailyMode) {
+                    setTimeout(() => {
+                        loadNeighborDistricts(d.adcode);
+                    }, 200);
+                }
+            });
+        }
+
+        searchWithRetry(3);
+    }
 }
 
 function loadDailyCity(name) {
@@ -1310,6 +1444,8 @@ function reloadCurrentMap() {
     if (reloadLock) return;
     reloadLock = true;
     setTimeout(() => { reloadLock = false; }, 500);
+
+    if (typeof quizCleanup === 'function') quizCleanup();
 
     playSound('click');
 
@@ -1465,10 +1601,22 @@ st = provinceFullMap[st] || st;
                     Math.floor(Math.random() * (fp.length > 0 ? fp : districts).length)
                 ];
 
+                // 特例：高德把"大柴旦行政委员会"返回为"海西蒙古族藏族自治州直辖"
+                let pickName = pick.name;
+                if (pick.adcode === '632825' && pickName === '海西蒙古族藏族自治州直辖') {
+                    pickName = '大柴旦行政委员会';
+                }
+
                 ds.search(pick.adcode, (s3, r3) => {
                     if (s3 === 'complete' && r3.districtList.length > 0 && r3.districtList[0].level === 'district') {
-                        recentDistricts.push(pick.name);
+                        recentDistricts.push(pickName);
                         if (recentDistricts.length > 20) recentDistricts.shift();
+
+                        // 特例：题目名统一成"大柴旦行政委员会"
+                        if (pickName === '大柴旦行政委员会') {
+                            lastLoadRequest = { type: 'district', name: '大柴旦行政委员会' };
+                        }
+
                         showDistrict(r3.districtList[0]);
                     } else {
                         newRound();
@@ -1825,11 +1973,26 @@ if (!input) return;
 const match = matchForMode(input);
 let correct = false;
 
-if (match.status === 'exact' || match.status === 'partial') {
-    const matchBase = match.name.replace(/（.+?）$/, '');
-    const targetBase = targetDistrict.name.replace(/（.+?）$/, '');
+let targetName = (lastLoadRequest && lastLoadRequest.name) ? lastLoadRequest.name : (targetDistrict ? targetDistrict.name : '');
 
-    correct = match.name === targetDistrict.name || matchBase === targetBase;
+// 特例：高德返回"海西蒙古族藏族自治州直辖"，视同"大柴旦行政委员会"
+if (targetName === '海西蒙古族藏族自治州直辖') {
+    targetName = '大柴旦行政委员会';
+}
+
+if (match.status === 'exact' || match.status === 'partial') {
+    // 带括号时：必须完整名相等（区分"城区（阳泉市）"和"城区（晋城市）"）
+    // 不带括号时：允许去括号相等（处理高德返回不带括号的情况）
+    const matchHasParen = match.name.includes('（');
+    const targetHasParen = targetName.includes('（');
+
+    if (matchHasParen || targetHasParen) {
+        correct = match.name === targetName;
+    } else {
+        const matchBase = match.name.replace(/（.+?）$/, '');
+        const targetBase = targetName.replace(/（.+?）$/, '');
+        correct = match.name === targetName || matchBase === targetBase;
+    }
 } else if (match.status === 'none') {
     const baseInput = input.replace(/（.+?）$/, '');
 

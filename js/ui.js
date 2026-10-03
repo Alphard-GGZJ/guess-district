@@ -8,44 +8,306 @@ function setMsg(text, className) {
     msg.className = className;
 }
 
-function bindUI() {
-
-document.getElementById('homeBtnPlay').addEventListener('click', () => {
-    playSound('click');
-    
+function enterGameThenRun(callback) {
     // 首页淡出
     document.getElementById('homeScreen').classList.add('fade-out');
-    
+
     // 遮罩淡入
     setTimeout(() => {
         document.getElementById('transitionOverlay').classList.add('show');
     }, 300);
-    
+
     setTimeout(() => {
         document.getElementById('transitionOverlay').classList.remove('show');
         document.getElementById('homeScreen').style.display = 'none';
+        document.getElementById('panel').style.display = 'block';
         document.getElementById('panel').classList.add('visible');
         document.getElementById('map').classList.add('visible');
-        
-        // 重新加载按钮显示（内联样式，用 JS 直接设置）
+
+        // 重新加载按钮显示
         const rb = document.getElementById('reloadBtn');
         rb.style.visibility = 'visible';
         rb.style.opacity = '1';
+
+        // 执行回调
+        if (typeof callback === 'function') callback();
     }, 800);
-    
+
     // 清理
     setTimeout(() => {
         document.getElementById('homeScreen').classList.remove('fade-out');
     }, 1400);
+}
+
+function showHomeScreenWithFade() {
+    const home = document.getElementById('homeScreen');
+
+    // 先复位状态，准备从透明开始
+    home.classList.remove('fade-out');
+    home.style.transition = 'none';
+    home.style.display = 'flex';
+    home.style.opacity = '0';
+    home.style.transform = 'scale(1.05)';
+
+    // 强制回流，让初始状态生效
+    void home.offsetWidth;
+
+    // 播放渐显
+    home.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+    home.style.opacity = '1';
+    home.style.transform = 'scale(1)';
+
+    // 动画结束后清理内联，恢复由 class 控制
+    setTimeout(() => {
+        home.style.transition = '';
+        home.style.opacity = '';
+        home.style.transform = '';
+    }, 550);
+}
+
+function backToHomeScreen() {
+    playSound('click');
+
+    if (typeof quizCleanup === 'function') quizCleanup();
+
+    // 退出每日挑战状态
+    dailyMode = false;
+    dailyCompleted = false;
+    dailyCityMode = false;
+
+    // 退出计时模式
+    if (timerMode) {
+        timerMode = false;
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        document.getElementById('btnTimer').classList.remove('active');
+        document.getElementById('timerDisplay').style.display = 'none';
+        document.getElementById('timerDisplay').textContent = '';
+    }
+
+    // 隐藏游戏内所有面板
+    document.getElementById('panel').style.display = 'none';
+    document.getElementById('dailyPanel').style.display = 'none';
+    document.getElementById('panel').classList.remove('visible');
+    document.getElementById('map').classList.remove('visible');
+    document.getElementById('dailyModePopup').style.display = 'none';
+
+    const rb = document.getElementById('reloadBtn');
+    if (rb) {
+        rb.style.visibility = 'hidden';
+        rb.style.opacity = '0';
+    }
+
+    // 渐显回首页
+    showHomeScreenWithFade();
+}
+
+function showDailyModePopup() {
+    const popup = document.getElementById('dailyModePopup');
+
+    // 清除可能残留的内联样式，统一由 CSS 类控制
+    popup.style.display = 'block';
+    popup.style.opacity = '';
+    popup.style.transform = '';
+    popup.style.transition = '';
+
+    // 确保从隐藏态开始
+    popup.classList.remove('daily-popup-visible');
+
+    // 强制回流，确立起点
+    void popup.offsetWidth;
+
+    // 切到显示态，触发过渡
+    popup.classList.add('daily-popup-visible');
+}
+
+function hideDailyModePopup(callback) {
+    const popup = document.getElementById('dailyModePopup');
+
+    // 若当前不可见，直接回调
+    if (getComputedStyle(popup).display === 'none') {
+        if (typeof callback === 'function') callback();
+        return;
+    }
+
+    // 切回隐藏态，触发 CSS 过渡
+    popup.classList.remove('daily-popup-visible');
+
+    let done = false;
+    const finish = () => {
+        if (done) return;
+        done = true;
+
+        popup.style.display = 'none';
+
+        if (typeof callback === 'function') callback();
+    };
+
+    // 监听透明度过渡结束
+    popup.addEventListener('transitionend', function handler(e) {
+        if (e.target !== popup || e.propertyName !== 'opacity') return;
+        popup.removeEventListener('transitionend', handler);
+        finish();
+    });
+
+    // 兜底
+    setTimeout(finish, 450);
+}
+
+function bindUI() {
+
+document.getElementById('homeBtnPlay').addEventListener('click', () => {
+    playSound('click');
+    enterGameThenRun(null);
 });
 
 document.getElementById('homeBtnQuiz').addEventListener('click', () => {
     playSound('click');
+    enterGameThenRun(() => openQuizPanel());
+});
+
+document.getElementById('quizQueryBtn').addEventListener('click', quizDoQuery);
+document.getElementById('quizQueryInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') quizDoQuery();
+});
+document.getElementById('quizSaveBtn').addEventListener('click', quizSaveImage);
+document.getElementById('quizPreviewBtn').addEventListener('click', quizPreviewImage);
+document.getElementById('quizClearBtn').addEventListener('click', quizClearAll);
+document.getElementById('quizExitBtn').addEventListener('click', quizExit);
+document.getElementById('quizFontSize').addEventListener('input', function() {
+    var v = parseInt(this.value);
+    if (!isFinite(v) || v < 0) return;
+    document.getElementById('quizFontSizeVal').textContent = v;
+});
+
+document.getElementById('quizShowNames').addEventListener('change', function() {
+    var show = this.checked;
+    quizRegions.forEach(function(r) {
+        if (!r.nameLabel) return;
+        if (show) r.nameLabel.show();
+        else r.nameLabel.hide();
+    });
+});
+
+document.getElementById('quizNameFontSize').addEventListener('input', function() {
+    // 只作为后续新增区域的默认名称字号，不影响已添加区域
+});
+
+document.getElementById('quizNameColor').addEventListener('input', function() {
+    // 只作为后续新增区域的默认名称颜色，不影响已添加区域
+});
+
+document.getElementById('homeBtnDaily').addEventListener('click', () => {
+    playSound('click');
+
+    const home = document.getElementById('homeScreen');
+
+    // 先清除可能残留的内联样式和状态，强制复位
+    home.style.opacity = '';
+    home.style.transform = '';
+    home.classList.remove('fade-out');
+
+    // 强制回流，确保动画可以重新触发
+    void home.offsetWidth;
+
+    // 首页淡出
+    home.classList.add('fade-out');
+
+    // 等首页淡出动画（0.5s）完全结束后，再显示弹窗
+    setTimeout(() => {
+        home.style.display = 'none';
+        home.classList.remove('fade-out');
+
+        // 复位内联，避免残留影响下次
+        home.style.opacity = '';
+        home.style.transform = '';
+
+        // 首页已完全消失，此时再显示弹窗并播放淡入
+        showDailyModePopup();
+    }, 550);
+});
+
+document.getElementById('dailyModeDistrict').addEventListener('click', () => {
+    playSound('click');
+    hideDailyModePopup(() => {
+        enterGameThenRun(() => startDailyChallenge(false));
+    });
+});
+
+document.getElementById('dailyModeCity').addEventListener('click', () => {
+    playSound('click');
+    hideDailyModePopup(() => {
+        enterGameThenRun(() => startDailyChallenge(true));
+    });
+});
+
+document.getElementById('dailyModeCancel').addEventListener('click', () => {
+    playSound('click');
+    // 先让弹窗完全淡出（约 300ms），再渐显首页
+    hideDailyModePopup(() => {
+        showHomeScreenWithFade();
+    });
+});
+
+document.getElementById('homeBtnMiniGames').addEventListener('click', () => {
+    playSound('click');
+
+    const home = document.getElementById('homeScreen');
+    home.style.opacity = '';
+    home.style.transform = '';
+    home.classList.remove('fade-out');
+    void home.offsetWidth;
+    home.classList.add('fade-out');
+
+    setTimeout(() => {
+        home.style.display = 'none';
+        home.classList.remove('fade-out');
+        home.style.opacity = '';
+        home.style.transform = '';
+
+        document.getElementById('map').classList.add('visible');
+        document.getElementById('panel').style.display = 'block';
+        document.getElementById('panel').classList.add('visible');
+        const rb = document.getElementById('reloadBtn');
+        rb.style.visibility = 'visible';
+        rb.style.opacity = '1';
+
+        openMiniGames();
+    }, 550);
+});
+
+document.getElementById('homeBtnBattle').addEventListener('click', () => {
+    playSound('click');
+
+    const home = document.getElementById('homeScreen');
+    home.style.opacity = '';
+    home.style.transform = '';
+    home.classList.remove('fade-out');
+    void home.offsetWidth;
+    home.classList.add('fade-out');
+
+    setTimeout(() => {
+        home.style.display = 'none';
+        home.classList.remove('fade-out');
+        home.style.opacity = '';
+        home.style.transform = '';
+
+        document.getElementById('map').classList.add('visible');
+        document.getElementById('panel').style.display = 'block';
+        document.getElementById('panel').classList.add('visible');
+        const rb = document.getElementById('reloadBtn');
+        rb.style.visibility = 'visible';
+        rb.style.opacity = '1';
+
+        openBattlePanel();
+    }, 550);
 });
 
     document.getElementById('reloadBtn').addEventListener('click', reloadCurrentMap);
+    document.getElementById('backHomeBtn').addEventListener('click', backToHomeScreen);
     document.getElementById('battleCollapseBtn').addEventListener('click', toggleBattleCollapse);
-        document.getElementById('btnBattle').addEventListener('click', openBattlePanel);
     document.getElementById('btnBattleExit').addEventListener('click', closeBattlePanel);
     document.getElementById('btnBattleCreate').addEventListener('click', createBattleRoom);
     document.getElementById('btnBattleJoin').addEventListener('click', joinBattleRoom);
@@ -83,8 +345,6 @@ document.getElementById('homeBtnQuiz').addEventListener('click', () => {
     document.getElementById('btnNormal').addEventListener('click', () => setMode('normal'));
     document.getElementById('btnHard').addEventListener('click', () => setMode('hard'));
     document.getElementById('btnClassic').addEventListener('click', () => setMode('classic'));
-document.getElementById('btnDaily').addEventListener('click', () => startDailyChallenge(false));
-document.getElementById('btnDailyCity').addEventListener('click', () => startDailyChallenge(true));
     document.getElementById('dailyReviewBtn').addEventListener('click', showDailyReview);
 document.getElementById('dailySubmitBtn').addEventListener('click', checkAnswer);
 document.getElementById('dailyExitBtn').addEventListener('click', exitDailyChallenge);
@@ -94,7 +354,6 @@ document.getElementById('dailyInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') checkAnswer();
 });
     document.getElementById('btnTimer').addEventListener('click', toggleTimer);
-    document.getElementById('btnMiniGames').addEventListener('click', openMiniGames);
     document.getElementById('btnMiniGamesExit').addEventListener('click', closeMiniGames);
     document.getElementById('btnFindDifferent').addEventListener('click', startFindDifferent);
     document.getElementById('btnCoastInland').addEventListener('click', () => {
@@ -195,6 +454,720 @@ document.getElementById('provinceSelect').addEventListener('change', function ()
     });
 }
 
+// ==================== 出题模式 ====================
+var quizRegions = [];
+
+var QUIZ_DEFAULT_COLORS = [
+    '#FF0000', '#0066FF', '#00AA00', '#FF6600', '#9900CC',
+    '#0099CC', '#CC0066', '#666600', '#FF69B4', '#00CED1'
+];
+
+function openQuizPanel() {
+    // 隐藏其他面板
+    document.getElementById('panel').style.display = 'none';
+    document.getElementById('dailyPanel').style.display = 'none';
+    document.getElementById('miniGamesPanel').style.display = 'none';
+    document.getElementById('battlePanel').style.display = 'none';
+
+    var qp = document.getElementById('quizPanel');
+    qp.style.display = 'block';
+    qp.classList.remove('pop-in');
+    void qp.offsetWidth;
+    qp.classList.add('pop-in');
+
+    // 隐藏重新加载地图按钮
+    var rb = document.getElementById('reloadBtn');
+    if (rb) {
+        rb.style.visibility = 'hidden';
+        rb.style.opacity = '0';
+    }
+
+    // 清除当前地图
+    if (typeof clearMap === 'function') clearMap();
+    if (typeof currentPolygons !== 'undefined') {
+        currentPolygons.forEach(function(p) { p.setMap(null); });
+        currentPolygons = [];
+    }
+}
+
+function quizExit() {
+    playSound('click');
+
+    quizCleanup();
+
+    // 渐显回首页
+    if (typeof showHomeScreenWithFade === 'function') {
+        showHomeScreenWithFade();
+    }
+
+    // 隐藏地图和游戏面板
+    document.getElementById('panel').style.display = 'none';
+    document.getElementById('panel').classList.remove('visible');
+    document.getElementById('map').classList.remove('visible');
+}
+
+// 清除出题模式的所有痕迹（地图图形、面板、输入、全局设置）
+function quizCleanup() {
+    if (typeof quizRegions !== 'undefined' && quizRegions.length > 0) {
+        quizRegions.forEach(function(r) {
+            r.polygon.forEach(function(p) { p.setMap(null); });
+            if (r.numLabel) r.numLabel.setMap(null);
+            if (r.nameLabel) r.nameLabel.setMap(null);
+        });
+    }
+    quizRegions = [];
+
+    var list = document.getElementById('quizRegionList');
+    if (list) list.innerHTML = '';
+
+    var panel = document.getElementById('quizPanel');
+    if (panel) panel.style.display = 'none';
+
+    // 清空输入框
+    var qi = document.getElementById('quizQueryInput');
+    if (qi) qi.value = '';
+    var qt = document.getElementById('quizTextContent');
+    if (qt) qt.value = '';
+
+    // 重置全局设置
+    var f = document.getElementById('quizFontSize');
+    if (f) f.value = '24';
+    var fv = document.getElementById('quizFontSizeVal');
+    if (fv) fv.textContent = '24';
+
+    var df = document.getElementById('quizDefaultFill');
+    if (df) df.value = '#FF0000';
+    var db = document.getElementById('quizDefaultBorder');
+    if (db) db.value = '#000000';
+    var dn = document.getElementById('quizDefaultNumColor');
+    if (dn) dn.value = '#FF0000';
+
+    var sn = document.getElementById('quizShowNames');
+    if (sn) sn.checked = false;
+
+    var nf = document.getElementById('quizNameFontSize');
+    if (nf) nf.value = '14';
+    var nc = document.getElementById('quizNameColor');
+    if (nc) nc.value = '#333333';
+
+    var tf = document.getElementById('quizTextFontSize');
+    if (tf) tf.value = '24';
+    var tc = document.getElementById('quizTextColor');
+    if (tc) tc.value = '#000000';
+}
+
+function quizDoQuery() {
+    var raw = document.getElementById('quizQueryInput').value.trim();
+    if (!raw) return;
+
+    document.getElementById('quizQueryInput').value = '';
+
+    if (quizRegions.some(function(r) { return r.name === raw; })) {
+        alert('已添加该区域');
+        return;
+    }
+
+    var adcodes = (typeof SHORT_NAME_ADCODE !== 'undefined') ? SHORT_NAME_ADCODE[raw] : null;
+    if (adcodes && adcodes.length > 0) {
+        quizSearchByAdcode(raw, adcodes[0]);
+        return;
+    }
+
+    var bm = raw.match(/（(.+?)）$/);
+    var baseName = bm ? raw.replace(/（.+?）$/, '') : raw;
+    var parentName = bm ? bm[1] : null;
+
+    ds.search(baseName, function(status, result) {
+        if (status !== 'complete' || !result.districtList || result.districtList.length === 0) {
+            alert('未找到：' + raw);
+            return;
+        }
+
+        var d = null;
+
+        d = result.districtList.find(function(x) {
+            return x.level === 'district' && x.name === baseName;
+        });
+
+        if (!d && parentName) {
+            d = result.districtList.find(function(x) {
+                if (x.level !== 'district') return false;
+                if (x.name !== baseName) return false;
+                return true;
+            });
+        }
+
+        if (!d) {
+            d = result.districtList.find(function(x) { return x.level === 'district'; });
+        }
+
+        if (!d || !d.boundaries || d.boundaries.length === 0) {
+            alert('该区域无边界数据');
+            return;
+        }
+
+        quizAddRegion(raw, d);
+    });
+}
+
+function quizSearchByAdcode(raw, adcode) {
+    ds.search(adcode, function(status, result) {
+        if (status !== 'complete' || !result.districtList || result.districtList.length === 0) {
+            alert('未找到：' + raw);
+            return;
+        }
+        var d = result.districtList.find(function(x) { return x.level === 'district'; }) || result.districtList[0];
+        if (!d || !d.boundaries || d.boundaries.length === 0) {
+            alert('该区域无边界数据');
+            return;
+        }
+        quizAddRegion(raw, d);
+    });
+}
+
+function quizAddRegion(name, district) {
+    var index = quizRegions.length;
+    var defaultFillEl = document.getElementById('quizDefaultFill');
+    var defaultBorderEl = document.getElementById('quizDefaultBorder');
+    var defaultNumColorEl = document.getElementById('quizDefaultNumColor');
+    var color = defaultFillEl ? defaultFillEl.value : QUIZ_DEFAULT_COLORS[index % QUIZ_DEFAULT_COLORS.length];
+    var borderColor = defaultBorderEl ? defaultBorderEl.value : '#000000';
+    var numColorInit = defaultNumColorEl ? defaultNumColorEl.value : color;
+
+    var polys = district.boundaries.map(function(b) {
+        return new AMap.Polygon({
+            map: map,
+            path: b,
+            strokeColor: borderColor,
+            strokeWeight: 2,
+            fillColor: color,
+            fillOpacity: 0.35
+        });
+    });
+
+    var center = district.center;
+    var initialSize = parseInt(document.getElementById('quizFontSize').value);
+    if (!isFinite(initialSize) || initialSize < 0) initialSize = 24;
+    var label = null;
+    if (center) {
+        label = new AMap.Text({
+            text: String(index + 1),
+            position: center,
+            anchor: 'center',
+            draggable: true,
+            style: {
+                'background': 'transparent',
+                'border': 'none',
+                'font-size': (initialSize > 0 ? initialSize : 24) + 'px',
+                'font-weight': 'bold',
+                'color': numColorInit,
+                'text-shadow': '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff',
+                'cursor': 'move'
+            },
+            map: map,
+            zIndex: 200
+        });
+
+        if (initialSize === 0) {
+            label.hide();
+        }
+    }
+
+    // 区县名称标签（在地图上显示）
+    var nameLabel = null;
+    if (center) {
+        var nameSizeEl = document.getElementById('quizNameFontSize');
+        var nameColorEl = document.getElementById('quizNameColor');
+        var nameSize = nameSizeEl ? parseInt(nameSizeEl.value) : 14;
+        if (!isFinite(nameSize) || nameSize < 0) nameSize = 14;
+        var nameColor = nameColorEl ? nameColorEl.value : '#333333';
+
+        nameLabel = new AMap.Text({
+            text: name,
+            position: center,
+            anchor: 'center',
+            draggable: true,
+            style: {
+                'background': 'transparent',
+                'border': 'none',
+                'font-size': nameSize + 'px',
+                'font-weight': 'bold',
+                'color': nameColor,
+                'text-shadow': '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff',
+                'cursor': 'default'
+            },
+            map: map,
+            zIndex: 210
+        });
+
+        var showNamesInit = document.getElementById('quizShowNames');
+        if (!showNamesInit || !showNamesInit.checked) {
+            nameLabel.hide();
+        }
+    }
+
+    var region = {
+        name: name,
+        color: color,
+        borderColor: borderColor,
+        adcode: district.adcode,
+        boundaries: district.boundaries,
+        center: center,
+        polygon: polys,
+        numText: String(index + 1),
+        numColor: numColorInit,
+        numSize: initialSize,
+        numLabel: label,
+        nameLabel: nameLabel,
+        nameSize: nameSize,
+        nameColor: nameColor
+    };
+
+    quizRegions.push(region);
+    map.setFitView(polys, null, [40, 40, 40, 40]);
+    quizRenderList();
+}
+
+function quizRenderList() {
+    var list = document.getElementById('quizRegionList');
+    list.innerHTML = '';
+
+    quizRegions.forEach(function(r, i) {
+        // 外层容器
+        var wrapper = document.createElement('div');
+        wrapper.style.cssText = 'margin-bottom:6px;background:#f5f5f5;border-radius:6px;padding:6px;';
+
+        // 第一行：区县名
+        var nameRow = document.createElement('div');
+        nameRow.style.cssText = 'display:flex;align-items:center;justify-content:flex-start;gap:6px;font-size:12px;font-weight:bold;color:#333;margin-bottom:6px;';
+
+        var nameText = document.createElement('div');
+        nameText.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        nameText.textContent = r.name;
+        nameText.title = r.name;
+        nameRow.appendChild(nameText);
+
+        var btnRemove = document.createElement('button');
+        btnRemove.textContent = '✕';
+        btnRemove.title = '删除';
+        btnRemove.style.cssText = 'flex-shrink:0;padding:2px 8px;border:none;border-radius:4px;background:#ef4444;color:white;cursor:pointer;font-size:11px;';
+        btnRemove.addEventListener('click', function() {
+            quizRemoveRegion(i);
+        });
+        nameRow.appendChild(btnRemove);
+
+        wrapper.appendChild(nameRow);
+
+        // 第二行：控件
+        var item = document.createElement('div');
+        item.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap;';
+
+        // ===== 区域颜色组：填充 + 边框 =====
+        var groupColor = document.createElement('div');
+        groupColor.style.cssText = 'display:flex;align-items:center;gap:4px;padding-right:8px;';
+
+        var swatchFill = document.createElement('input');
+        swatchFill.type = 'color';
+        swatchFill.value = r.color;
+        swatchFill.title = '填充色';
+        swatchFill.style.cssText = 'width:20px;height:20px;border-radius:4px;border:1px solid #ccc;cursor:pointer;';
+        swatchFill.addEventListener('input', function() {
+            r.color = this.value;
+            r.polygon.forEach(function(p) { p.setOptions({ fillColor: r.color }); });
+        });
+        groupColor.appendChild(swatchFill);
+
+        var swatchBorder = document.createElement('input');
+        swatchBorder.type = 'color';
+        swatchBorder.value = r.borderColor;
+        swatchBorder.title = '边框色';
+        swatchBorder.style.cssText = 'width:20px;height:20px;border-radius:4px;border:1px solid #ccc;cursor:pointer;';
+        swatchBorder.addEventListener('input', function() {
+            r.borderColor = this.value;
+            r.polygon.forEach(function(p) { p.setOptions({ strokeColor: r.borderColor }); });
+        });
+        groupColor.appendChild(swatchBorder);
+
+        item.appendChild(groupColor);
+
+        // 分隔线 1：颜色组 | 名称组
+        var divider1 = document.createElement('div');
+        divider1.style.cssText = 'flex:0 0 2px;height:20px;background:#999;border-radius:1px;';
+        item.appendChild(divider1);
+
+        // ===== 名称组：名称颜色 + 名称字号 =====
+        var groupName = document.createElement('div');
+        groupName.style.cssText = 'display:flex;align-items:center;gap:4px;padding-right:8px;';
+
+        var nameColor = document.createElement('input');
+        nameColor.type = 'color';
+        nameColor.value = r.nameColor || '#333333';
+        nameColor.title = '名称颜色';
+        nameColor.style.cssText = 'width:20px;height:20px;border-radius:4px;border:1px solid #ccc;cursor:pointer;';
+        nameColor.addEventListener('input', function() {
+            r.nameColor = this.value;
+            if (r.nameLabel) r.nameLabel.setStyle({ 'color': r.nameColor });
+        });
+        groupName.appendChild(nameColor);
+
+        var nameSize = document.createElement('input');
+        nameSize.type = 'number';
+        nameSize.min = '0';
+        nameSize.value = (r.nameSize !== undefined) ? r.nameSize : 14;
+        nameSize.title = '名称字号（0 隐藏名称）';
+        nameSize.style.cssText = 'width:44px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:center;';
+        nameSize.addEventListener('input', function() {
+            var v = parseInt(this.value);
+            if (!isFinite(v) || v < 0) return;
+            r.nameSize = v;
+            if (!r.nameLabel) return;
+            if (v === 0) r.nameLabel.hide();
+            else {
+                r.nameLabel.setStyle({ 'font-size': v + 'px' });
+                var showNamesEl = document.getElementById('quizShowNames');
+                if (showNamesEl && showNamesEl.checked) r.nameLabel.show();
+            }
+        });
+        groupName.appendChild(nameSize);
+
+        item.appendChild(groupName);
+
+        // 分隔线 2：名称组 | 数字组
+        var divider2 = document.createElement('div');
+        divider2.style.cssText = 'flex:0 0 2px;height:20px;background:#999;border-radius:1px;';
+        item.appendChild(divider2);
+
+        // ===== 数字组：内容 + 颜色 + 字号 =====
+        var groupNum = document.createElement('div');
+        groupNum.style.cssText = 'display:flex;align-items:center;gap:4px;';
+
+        var numInput = document.createElement('input');
+        numInput.type = 'text';
+        numInput.value = r.numText;
+        numInput.title = '数字内容';
+        numInput.style.cssText = 'width:44px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:center;';
+        numInput.addEventListener('input', function() {
+            r.numText = this.value;
+            if (r.numLabel) r.numLabel.setText(this.value);
+        });
+        groupNum.appendChild(numInput);
+
+        var numColor = document.createElement('input');
+        numColor.type = 'color';
+        numColor.value = r.numColor;
+        numColor.title = '数字颜色';
+        numColor.style.cssText = 'width:20px;height:20px;border-radius:4px;border:1px solid #ccc;cursor:pointer;';
+        numColor.addEventListener('input', function() {
+            r.numColor = this.value;
+            if (r.numLabel) r.numLabel.setStyle({ 'color': r.numColor });
+        });
+        groupNum.appendChild(numColor);
+
+        var numSize = document.createElement('input');
+        numSize.type = 'number';
+        numSize.min = '0';
+        numSize.value = r.numSize;
+        numSize.title = '数字字号（0 隐藏数字）';
+        numSize.style.cssText = 'width:44px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:center;';
+        numSize.addEventListener('input', function() {
+            var v = parseInt(this.value);
+            if (!isFinite(v) || v < 0) return;
+            r.numSize = v;
+            if (!r.numLabel) return;
+            if (v === 0) r.numLabel.hide();
+            else { r.numLabel.show(); r.numLabel.setStyle({ 'font-size': v + 'px' }); }
+        });
+        groupNum.appendChild(numSize);
+
+        item.appendChild(groupNum);
+
+        wrapper.appendChild(item);
+        list.appendChild(wrapper);
+    });
+}
+
+function quizRemoveRegion(index) {
+    var r = quizRegions[index];
+    if (!r) return;
+    r.polygon.forEach(function(p) { p.setMap(null); });
+    if (r.numLabel) r.numLabel.setMap(null);
+    if (r.nameLabel) r.nameLabel.setMap(null);
+    quizRegions.splice(index, 1);
+    quizRenderList();
+}
+
+function quizClearAll() {
+    if (!confirm('确定清空所有区域？')) return;
+    quizRegions.forEach(function(r) {
+        r.polygon.forEach(function(p) { p.setMap(null); });
+        if (r.numLabel) r.numLabel.setMap(null);
+        if (r.nameLabel) r.nameLabel.setMap(null);
+    });
+    quizRegions = [];
+    quizRenderList();
+}
+
+function quizRenderCanvas() {
+    if (quizRegions.length === 0) {
+        return null;
+    }
+
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    quizRegions.forEach(function(r) {
+        r.boundaries.forEach(function(b) {
+            b.forEach(function(p) {
+                var lng = p.lng !== undefined ? p.lng : p[0];
+                var lat = p.lat !== undefined ? p.lat : p[1];
+                minX = Math.min(minX, lng);
+                maxX = Math.max(maxX, lng);
+                minY = Math.min(minY, lat);
+                maxY = Math.max(maxY, lat);
+            });
+        });
+        if (r.numLabel) {
+            var pos = r.numLabel.getPosition();
+            if (pos) {
+                minX = Math.min(minX, pos.lng);
+                maxX = Math.max(maxX, pos.lng);
+                minY = Math.min(minY, pos.lat);
+                maxY = Math.max(maxY, pos.lat);
+            }
+        }
+    });
+
+    if (!isFinite(minX) || !isFinite(minY)) {
+        alert('无可保存内容');
+        return;
+    }
+
+    // 修正经纬度比例：按中心纬度的 cos 值归一化经度，避免纵向拉伸
+    var centerLat = (minY + maxY) / 2;
+    var cosLat = Math.cos(centerLat * Math.PI / 180);
+    if (cosLat < 0.01) cosLat = 0.01;
+
+    // 归一化后：经度方向按 cosLat 压缩
+    var rangeX = (maxX - minX) * cosLat;
+    var rangeY = maxY - minY;
+    var maxSide = 1600;
+    var padding = 60;
+
+    var scale = (rangeX >= rangeY)
+        ? (maxSide - padding * 2) / rangeX
+        : (maxSide - padding * 2) / rangeY;
+
+    var canvasW = Math.ceil(rangeX * scale + padding * 2);
+    var canvasH = Math.ceil(rangeY * scale + padding * 2);
+
+    function toCanvas(lng, lat) {
+        return [
+            padding + (lng - minX) * cosLat * scale,
+            padding + (maxY - lat) * scale
+        ];
+    }
+
+    var canvas = document.createElement('canvas');
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+    var ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    quizRegions.forEach(function(r) {
+        r.boundaries.forEach(function(b) {
+            ctx.beginPath();
+            b.forEach(function(p, i) {
+                var lng = p.lng !== undefined ? p.lng : p[0];
+                var lat = p.lat !== undefined ? p.lat : p[1];
+                var pt = toCanvas(lng, lat);
+                if (i === 0) ctx.moveTo(pt[0], pt[1]);
+                else ctx.lineTo(pt[0], pt[1]);
+            });
+            ctx.closePath();
+            ctx.strokeStyle = r.borderColor || '#000000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = quizHexToRgba(r.color, 0.35);
+            ctx.fill();
+        });
+    });
+
+    quizRegions.forEach(function(r) {
+        if (!r.numLabel || !r.numText) return;
+        if (r.numSize === 0) return;
+        var pos = r.numLabel.getPosition();
+        if (!pos) return;
+
+        var pt = toCanvas(pos.lng, pos.lat);
+
+        var canvasFontSize = r.numSize || 24;
+
+        ctx.font = 'bold ' + canvasFontSize + 'px "Microsoft YaHei", Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        ctx.lineWidth = Math.max(2, canvasFontSize * 0.15);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineJoin = 'round';
+        ctx.strokeText(r.numText, pt[0], pt[1]);
+
+        ctx.fillStyle = r.numColor;
+        ctx.fillText(r.numText, pt[0], pt[1]);
+    });
+
+    // 区县名称
+    var showNames = document.getElementById('quizShowNames').checked;
+    if (showNames) {
+        var nameBaseSizeEl = document.getElementById('quizNameFontSize');
+        var nameBaseSize = nameBaseSizeEl ? parseInt(nameBaseSizeEl.value) : 14;
+        if (!isFinite(nameBaseSize) || nameBaseSize < 0) nameBaseSize = 14;
+        if (nameBaseSize === 0) return;  // 字号 0，不画名称
+
+        quizRegions.forEach(function(r) {
+            if (!r.nameLabel) return;
+            var pos = r.nameLabel.getPosition();
+            if (!pos) return;
+            var pt = toCanvas(pos.lng, pos.lat);
+            var perSize = (r.nameSize !== undefined) ? r.nameSize : nameBaseSize;
+            if (perSize === 0) return;
+            var canvasNameSize = perSize;
+            if (canvasNameSize < 1) canvasNameSize = 1;
+
+            ctx.font = 'bold ' + canvasNameSize + 'px "Microsoft YaHei", Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            ctx.lineWidth = Math.max(1.5, canvasNameSize * 0.15);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineJoin = 'round';
+            ctx.strokeText(r.name, pt[0], pt[1]);
+
+            // 优先用区域自己的名称颜色
+            ctx.fillStyle = r.nameColor || '#333333';
+            ctx.fillText(r.name, pt[0], pt[1]);
+        });
+    }
+
+    // 文字标注（左上角）
+    var textContent = (document.getElementById('quizTextContent').value || '').trim();
+    if (textContent) {
+        var textFontSize = parseInt(document.getElementById('quizTextFontSize').value);
+        if (!isFinite(textFontSize) || textFontSize < 0) textFontSize = 24;
+        var textColor = document.getElementById('quizTextColor').value;
+
+        var canvasTextSize = textFontSize;
+        if (canvasTextSize < 1) {
+            // 字号为 0，不画文字
+        } else {
+            var lines = textContent.split('\n');
+            var lineHeight = canvasTextSize * 1.3;
+
+            ctx.font = 'bold ' + canvasTextSize + 'px "Microsoft YaHei", Arial, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = textColor;
+
+            var textX = 10;
+            var textY = 10;
+
+            lines.forEach(function(line, i) {
+                ctx.fillText(line, textX, textY + i * lineHeight);
+            });
+        }
+
+        var lines = textContent.split('\n');
+        var lineHeight = canvasTextSize * 1.3;
+
+        ctx.font = 'bold ' + canvasTextSize + 'px "Microsoft YaHei", Arial, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = textColor;
+
+        var textX = 10;
+        var textY = 10;
+
+        lines.forEach(function(line, i) {
+            ctx.fillText(line, textX, textY + i * lineHeight);
+        });
+    }
+
+    return canvas;
+}
+
+function quizSaveImage() {
+    var canvas = quizRenderCanvas();
+    if (!canvas) {
+        alert('请先添加区域');
+        return;
+    }
+
+    var link = document.createElement('a');
+    var ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    link.download = '出题_' + ts + '.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+}
+
+function quizPreviewImage() {
+    var canvas = quizRenderCanvas();
+    if (!canvas) {
+        alert('请先添加区域');
+        return;
+    }
+
+    // 遮罩
+    var overlay = document.createElement('div');
+    overlay.id = 'quizPreviewOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:100000;display:flex;align-items:center;justify-content:center;';
+
+    // 预览容器
+    var box = document.createElement('div');
+    box.style.cssText = 'background:white;padding:16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.5);max-width:90vw;max-height:90vh;overflow:auto;position:relative;';
+
+    // 关闭按钮
+    var closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'position:absolute;top:8px;right:8px;width:32px;height:32px;border:none;border-radius:50%;background:#ef4444;color:white;cursor:pointer;font-size:16px;';
+    closeBtn.addEventListener('click', function() {
+        document.body.removeChild(overlay);
+    });
+    box.appendChild(closeBtn);
+
+    // 图片
+    var img = document.createElement('img');
+    img.src = canvas.toDataURL('image/png');
+    img.style.cssText = 'max-width:85vw;max-height:80vh;display:block;border:1px solid #eee;';
+    box.appendChild(img);
+
+    // 尺寸提示
+    var info = document.createElement('div');
+    info.style.cssText = 'text-align:center;font-size:12px;color:#666;margin-top:8px;';
+    info.textContent = '尺寸：' + canvas.width + ' × ' + canvas.height + ' px';
+    box.appendChild(info);
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    // 点遮罩关闭
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+}
+
+function quizHexToRgba(hex, alpha) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) {
+        hex = hex.split('').map(function(c) { return c + c; }).join('');
+    }
+    var r = parseInt(hex.substring(0, 2), 16);
+    var g = parseInt(hex.substring(2, 4), 16);
+    var b = parseInt(hex.substring(4, 6), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
 // 显示筛选提示的辅助函数
 function showFilterHint(elementId, text, type = 'info') {
     const hint = document.getElementById(elementId);
@@ -222,6 +1195,9 @@ function initSpeedSetting() {
 }
 
 function setMode(mode) {
+    // 清除出题模式痕迹
+    if (typeof quizCleanup === 'function') quizCleanup();
+
     lastLoadRequest = null;
 
     // 计时模式开启时禁止切换难度
@@ -363,13 +1339,21 @@ let findDifferentLevel = 'district';
 
 function openMiniGames() {
     playSound('click');
+    if (typeof quizCleanup === 'function') quizCleanup();
     dailyMode = false;
     if (timerMode) {
         toggleTimer();
     }
     document.getElementById('panel').style.display = 'none';
     document.getElementById('dailyPanel').style.display = 'none';
-    
+
+    // 隐藏重新加载地图按钮
+    var rb = document.getElementById('reloadBtn');
+    if (rb) {
+        rb.style.visibility = 'hidden';
+        rb.style.opacity = '0';
+    }
+
     const miniPanel = document.getElementById('miniGamesPanel');
     miniPanel.style.display = 'block';
     // 添加弹入动画
@@ -381,32 +1365,51 @@ function openMiniGames() {
 function closeMiniGames() {
     playSound('click');
     findDifferentMode = false;
-    
-    const miniPanel = document.getElementById('miniGamesPanel');
-    // 缩小退出动画
-    miniPanel.style.transform = 'scale(0.85)';
-    miniPanel.style.opacity = '0';
-    miniPanel.style.transition = 'all 0.2s ease';
-    
-    setTimeout(() => {
-        miniPanel.style.display = 'none';
-        miniPanel.style.transform = '';
-        miniPanel.style.opacity = '';
-        miniPanel.style.transition = '';
-        
-        document.getElementById('panel').style.display = 'block';
-        document.getElementById('panelContent').style.display = 'block';
-        document.getElementById('panel').classList.remove('pop-in');
-        void document.getElementById('panel').offsetWidth;
-        document.getElementById('panel').classList.add('pop-in');
-    }, 200);
-    
+
+    // 移除“找不同”浮动面板
+    const floatPanel = document.getElementById('findDifferentFloatPanel');
+    if (floatPanel) floatPanel.remove();
+
     const optionsDiv = document.getElementById('findDifferentOptions');
     if (optionsDiv) optionsDiv.remove();
-    
-    if (map) {
-        newRound();
-    }
+
+    const miniPanel = document.getElementById('miniGamesPanel');
+
+    // 缩小淡出
+    miniPanel.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    miniPanel.style.opacity = '0';
+    miniPanel.style.transform = 'translate(-50%, -50%) scale(0.85)';
+
+    let done = false;
+    const finish = () => {
+        if (done) return;
+        done = true;
+
+        miniPanel.style.display = 'none';
+        miniPanel.style.opacity = '';
+        miniPanel.style.transform = '';
+        miniPanel.style.transition = '';
+
+        // 收起游戏面板与地图，渐显回首页
+        document.getElementById('panel').style.display = 'none';
+        document.getElementById('panel').classList.remove('visible');
+        document.getElementById('map').classList.remove('visible');
+
+        const rb = document.getElementById('reloadBtn');
+        if (rb) {
+            rb.style.visibility = 'hidden';
+            rb.style.opacity = '0';
+        }
+
+        showHomeScreenWithFade();
+    };
+
+    miniPanel.addEventListener('transitionend', function handler(e) {
+        if (e.target !== miniPanel || e.propertyName !== 'opacity') return;
+        miniPanel.removeEventListener('transitionend', handler);
+        finish();
+    });
+    setTimeout(finish, 400);
 }
 
 function startFindDifferent() {
@@ -941,7 +1944,12 @@ const battleDistrictCache = {};
 // 加载对决战地图
 function loadBattleDistrict(name) {
     if (!name) return;
-    
+
+    // 特例：高德返回"海西蒙古族藏族自治州直辖"，统一用"大柴旦行政委员会"
+    if (name === '海西蒙古族藏族自治州直辖') {
+        name = '大柴旦行政委员会';
+    }
+
     lastLoadRequest = { type: 'battle', name: name };
     
     const bm = name.match(/（(.+?)）$/);
@@ -952,6 +1960,40 @@ function loadBattleDistrict(name) {
     
     if (battleDistrictCache[cacheKey]) {
         displayBattleDistrict(battleDistrictCache[cacheKey], name);
+        return;
+    }
+
+    // 优先：短名 adcode 白名单
+    const whitelistAdcodes = (typeof SHORT_NAME_ADCODE !== 'undefined') ? SHORT_NAME_ADCODE[name] : null;
+    if (whitelistAdcodes && whitelistAdcodes.length > 0) {
+        ds.search(whitelistAdcodes[0], (status, result) => {
+            if (status === 'complete' && result.districtList && result.districtList.length > 0) {
+                const d = result.districtList.find(x => x.level === 'district') || result.districtList[0];
+                if (d && d.boundaries && d.boundaries.length > 0) {
+                    battleDistrictCache[cacheKey] = d;
+                    displayBattleDistrict(d, name);
+                    return;
+                }
+            }
+            fallback();
+        });
+        return;
+    }
+
+    // 次优：adcode 索引（目前 getAdcodeByName 返回 null，会跳过）
+    const battleAdcode = (typeof getAdcodeByName === 'function') ? getAdcodeByName(name) : null;
+    if (battleAdcode) {
+        ds.search(battleAdcode, (status, result) => {
+            if (status === 'complete' && result.districtList && result.districtList.length > 0) {
+                const d = result.districtList.find(x => x.level === 'district') || result.districtList[0];
+                if (d && d.boundaries && d.boundaries.length > 0) {
+                    battleDistrictCache[cacheKey] = d;
+                    displayBattleDistrict(d, name);
+                    return;
+                }
+            }
+            fallback();
+        });
         return;
     }
     
@@ -992,20 +2034,30 @@ function loadBattleDistrict(name) {
             ds.search(baseName, (status, result) => {
                 if (status === 'complete' && result.districtList && result.districtList.length > 0) {
                     let d;
+
                     if (battleRange === 'city') {
-                        d = result.districtList.find(x => x.level === 'city') || result.districtList[0];
+                        // 地级模式：优先名称完全相等
+                        d = result.districtList.find(x => x.level === 'city' && x.name === baseName);
+                        if (!d) d = result.districtList.find(x => x.level === 'city') || result.districtList[0];
                     } else {
-                        if (parentName) {
+                        // 县级模式：优先名称完全相等（关键修复）
+                        d = result.districtList.find(x => x.level === 'district' && x.name === baseName);
+
+                        // 次优：有 parentName 时按城市匹配
+                        if (!d && parentName) {
                             d = result.districtList.find(x => {
                                 if (x.level !== 'district') return false;
                                 const city = getCityName(x.adcode);
                                 return city.includes(parentName) || parentName.includes(city);
                             });
                         }
+
+                        // 兜底：第一个 district
                         if (!d) {
                             d = result.districtList.find(x => x.level === 'district');
                         }
                     }
+
                     if (d && d.boundaries && d.boundaries.length > 0) {
                         battleDistrictCache[cacheKey] = d;
                         displayBattleDistrict(d, name);
@@ -1041,6 +2093,7 @@ function displayBattleDistrict(d, originalName) {
 // 打开面板
 function openBattlePanel() {
     playSound('click');
+    if (typeof quizCleanup === 'function') quizCleanup();
     dailyMode = false;
     findDifferentMode = false;
     
@@ -1069,14 +2122,43 @@ function openBattlePanel() {
 function closeBattlePanel() {
     playSound('click');
     const bp = document.getElementById('battlePanel');
-    bp.classList.remove('pop-in');
-    bp.style.display = 'none';
-    
-    document.getElementById('panel').style.display = 'block';
-    document.getElementById('panelContent').style.display = 'block';
-    document.getElementById('panel').classList.remove('pop-in');
-    void document.getElementById('panel').offsetWidth;
-    document.getElementById('panel').classList.add('pop-in');
+
+    // 淡出
+    bp.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    bp.style.opacity = '0';
+    bp.style.transform = 'translate(-50%, -50%) scale(0.85)';
+
+    let done = false;
+    const finish = () => {
+        if (done) return;
+        done = true;
+
+        bp.style.display = 'none';
+        bp.classList.remove('pop-in');
+        bp.style.opacity = '';
+        bp.style.transform = '';
+        bp.style.transition = '';
+
+        // 收起游戏面板与地图，渐显回首页
+        document.getElementById('panel').style.display = 'none';
+        document.getElementById('panel').classList.remove('visible');
+        document.getElementById('map').classList.remove('visible');
+
+        const rb = document.getElementById('reloadBtn');
+        if (rb) {
+            rb.style.visibility = 'hidden';
+            rb.style.opacity = '0';
+        }
+
+        showHomeScreenWithFade();
+    };
+
+    bp.addEventListener('transitionend', function handler(e) {
+        if (e.target !== bp || e.propertyName !== 'opacity') return;
+        bp.removeEventListener('transitionend', handler);
+        finish();
+    });
+    setTimeout(finish, 400);
 }
 
 // 生成房间号
@@ -1532,14 +2614,26 @@ battleSubmitLock = false;
         }
         targetName = battleOwnQuestion;
     }
+
+    // 特例：高德返回"海西蒙古族藏族自治州直辖"，视同"大柴旦行政委员会"
+    if (targetName === '海西蒙古族藏族自治州直辖') {
+        targetName = '大柴旦行政委员会';
+    }
     
     // 用 matchForMode 统一匹配（和单机一致）
     const match = matchForMode(input, battleRange === 'city' ? 'normal' : 'hard');
     
     if (match.status === 'exact' || match.status === 'partial') {
-        const matchBase = match.name.replace(/（.+?）$/, '');
-        const targetBase = targetName.replace(/（.+?）$/, '');
-        correct = match.name === targetName || matchBase === targetBase;
+        const matchHasParen = match.name.includes('（');
+        const targetHasParen = targetName.includes('（');
+
+        if (matchHasParen || targetHasParen) {
+            correct = match.name === targetName;
+        } else {
+            const matchBase = match.name.replace(/（.+?）$/, '');
+            const targetBase = targetName.replace(/（.+?）$/, '');
+            correct = match.name === targetName || matchBase === targetBase;
+        }
         if (correct) correctName = targetName;
     } else if (match.status === 'none') {
         const baseInput = input.replace(/（.+?）$/, '');
