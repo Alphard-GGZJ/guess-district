@@ -1550,6 +1550,12 @@ battleSubmitLock = false;
         
         await addBattleScore();
         
+        if (data.mode === 'score') {
+            setTimeout(() => {
+                battleAnswered = false;
+                battleSubmitLock = false;
+                generateOwnQuestion();
+            }, 800);
         } else {
             // 竞速模式：谁答对谁清空题目，房主出下一题
             await supabaseClient
