@@ -10,6 +10,16 @@
 </head>
 <body>
 
+<div id="homeScreen">
+    <h1>🗺️ 看图猜区县</h1>
+    <div id="homeMenu">
+        <button id="homeBtnPlay">🎮 看图猜区县</button>
+        <button id="homeBtnQuiz">📝 出题模式</button>
+    </div>
+</div>
+
+<div id="transitionOverlay"></div>
+
     <!-- 游戏面板 -->
 <div id="panel">
     <h3>
@@ -176,7 +186,7 @@
 <div id="watermark">Alphard_改革则吉ver</div>
 
 <!-- 全局重新加载按钮（所有模式共用） -->
-<button id="reloadBtn" type="button" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:99999;font-size:13px;padding:6px 16px;background:rgba(255,255,255,0.95);border:1px solid #ccc;border-radius:20px;cursor:pointer;color:#666;box-shadow:0 2px 8px rgba(0,0,0,0.15);">🔄 重新加载地图</button>
+<button id="reloadBtn" type="button" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:99999;font-size:13px;padding:6px 16px;background:rgba(255,255,255,0.95);border:1px solid #ccc;border-radius:20px;cursor:pointer;color:#666;box-shadow:0 2px 8px rgba(0,0,0,0.15);visibility:hidden;opacity:0;transition:opacity 0.3s ease;">🔄 重新加载地图</button>
 
     <!-- 1. 先加载配置文件 -->
     <script src="js/config.js"></script>
