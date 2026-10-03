@@ -359,9 +359,8 @@ aliasMap['龙胜各族自治县'] = ['龙胜各族自治县', '龙胜', '龙胜�
 aliasMap['隆林各族自治县'] = ['隆林各族自治县', '隆林', '隆林县'];
 aliasMap['陵水黎族自治县'] = ['陵水黎族自治县', '陵水', '陵水县'];
 aliasMap['彭水苗族土家族自治县'] = ['彭水苗族土家族自治县', '彭水', '彭水县'];
-if (aliasMap['滨海县']) {
-    aliasMap['滨海县'] = ['滨海县'];
-}
+if (aliasMap['滨海新区']) aliasMap['滨海新区'] = ['滨海新区'];
+if (aliasMap['滨海县']) aliasMap['滨海县'] = ['滨海县'];
 
 function matchDistrict(input) {
     const exact = [];

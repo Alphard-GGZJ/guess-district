@@ -1533,31 +1533,22 @@ battleSubmitLock = false;
         targetName = battleOwnQuestion;
     }
     
-    const targetAliases = aliasMap[targetName] || [targetName];
-    const targetBase = targetName.replace(/（.+?）$/, '');
+    // 用 matchForMode 统一匹配（和单机一致）
+    const match = matchForMode(input, battleRange === 'city' ? 'normal' : 'hard');
     
-    if (targetAliases.includes(input)) {
-        correct = true;
-        correctName = targetName;
-    } else {
-        const suffixes = ['区', '县', '市', '旗', '盟', '州', '林区'];
-        for (const suffix of suffixes) {
-            if (targetAliases.includes(input + suffix)) {
-                correct = true;
-                correctName = targetName;
-                break;
-            }
-        }
-    }
-    
-    // 未匹配 → 检查是否重名
-    if (!correct) {
+    if (match.status === 'exact' || match.status === 'partial') {
+        const matchBase = match.name.replace(/（.+?）$/, '');
+        const targetBase = targetName.replace(/（.+?）$/, '');
+        correct = match.name === targetName || matchBase === targetBase;
+        if (correct) correctName = targetName;
+    } else if (match.status === 'none') {
+        const baseInput = input.replace(/（.+?）$/, '');
         const possible = Object.keys(ADJACENCY).filter(name => {
             const aliases = aliasMap[name] || [name];
-            return aliases.includes(input) ||
-                   aliases.includes(input + '区') ||
-                   aliases.includes(input + '县') ||
-                   aliases.includes(input + '市');
+            return aliases.includes(baseInput) ||
+                   aliases.includes(baseInput + '区') ||
+                   aliases.includes(baseInput + '县') ||
+                   aliases.includes(baseInput + '市');
         });
         
         if (possible.length > 1) {
