@@ -9,6 +9,40 @@ function setMsg(text, className) {
 }
 
 function bindUI() {
+
+document.getElementById('homeBtnPlay').addEventListener('click', () => {
+    playSound('click');
+    
+    // 首页淡出
+    document.getElementById('homeScreen').classList.add('fade-out');
+    
+    // 遮罩淡入
+    setTimeout(() => {
+        document.getElementById('transitionOverlay').classList.add('show');
+    }, 300);
+    
+    setTimeout(() => {
+        document.getElementById('transitionOverlay').classList.remove('show');
+        document.getElementById('homeScreen').style.display = 'none';
+        document.getElementById('panel').classList.add('visible');
+        document.getElementById('map').classList.add('visible');
+        
+        // 重新加载按钮显示（内联样式，用 JS 直接设置）
+        const rb = document.getElementById('reloadBtn');
+        rb.style.visibility = 'visible';
+        rb.style.opacity = '1';
+    }, 800);
+    
+    // 清理
+    setTimeout(() => {
+        document.getElementById('homeScreen').classList.remove('fade-out');
+    }, 1400);
+});
+
+document.getElementById('homeBtnQuiz').addEventListener('click', () => {
+    playSound('click');
+});
+
     document.getElementById('reloadBtn').addEventListener('click', reloadCurrentMap);
     document.getElementById('battleCollapseBtn').addEventListener('click', toggleBattleCollapse);
         document.getElementById('btnBattle').addEventListener('click', openBattlePanel);
@@ -914,7 +948,7 @@ function loadBattleDistrict(name) {
     
     // 有缓存直接用
     if (battleDistrictCache[baseName]) {
-        displayBattleDistrict(battleDistrictCache[baseName]);
+        displayBattleDistrict(battleDistrictCache[baseName], name);
         return;
     }
     
@@ -930,7 +964,7 @@ function loadBattleDistrict(name) {
                 }
                 if (d && d.boundaries && d.boundaries.length > 0) {
                     battleDistrictCache[baseName] = d;
-                    displayBattleDistrict(d);
+                    displayBattleDistrict(d, name);
                 }
             } else if (retry > 0) {
                 retry--;
@@ -941,8 +975,10 @@ function loadBattleDistrict(name) {
     attempt();
 }
 
-function displayBattleDistrict(d) {
-    if (d && d.name) {
+function displayBattleDistrict(d, originalName) {
+    if (originalName) {
+        battleCurrentDisplayed = originalName;
+    } else if (d && d.name) {
         battleCurrentDisplayed = d.name;
     }
     
@@ -1289,11 +1325,6 @@ function handleBattleUpdate(roomData) {
                 document.getElementById('battleQuestion').textContent = '🏳️ 双方都放弃，换新题...';
                 document.getElementById('battleInput').disabled = true;
                 document.getElementById('battleGiveUpBtn').disabled = true;
-                
-                if (battlePlayerNumber === 1 && battleLastQuestion !== null) {
-                    battleLastQuestion = null;
-                    setTimeout(() => startRaceQuestion(), 1000);
-                }
                 return;
             }
             
@@ -1317,6 +1348,12 @@ function handleBattleUpdate(roomData) {
             const totalScore = (roomData.player1_score || 0) + (roomData.player2_score || 0);
             if (totalScore > battleLastTotalScore) {
                 battleLastTotalScore = totalScore;
+            }
+            // 对方已占坑 → 锁定自己输入
+            if (roomData.last_winner && roomData.last_winner !== battlePlayerName && roomData.current_question === battleCurrentDisplayed) {
+                document.getElementById('battleInput').disabled = true;
+                document.getElementById('battleSubmitBtn').disabled = true;
+                document.getElementById('battleQuestion').textContent = '⏳ 对方已答对，等待下一题...';
             }
 
             // 未开局
@@ -1393,6 +1430,7 @@ async function startRaceQuestion() {
         .update({
             current_question: firstQ,
             question_seq: battleQuestionIndex,
+            last_winner: null,
             player1_giveup: false,
             player2_giveup: false
         })
@@ -1479,6 +1517,12 @@ battleSubmitLock = false;
     if (correct) {
         playSound('correct');
         document.getElementById('battleQuestion').textContent = `✅ 答对了！是 ${correctName}`;
+        
+        // 答对后立即锁定自己（后续靠服务器同步锁定对方）
+        battleAnswered = true;
+        battleSubmitLock = true;
+        document.getElementById('battleInput').disabled = true;
+        document.getElementById('battleSubmitBtn').disabled = true;
 
         // 写入服务器 correct_log（双方共享）
         const record = {
@@ -1505,6 +1549,14 @@ battleSubmitLock = false;
         // 本地也记一份（用于复盘兜底）
         battleHistory.push(record);
         
+        // 立即占坑：标记自己为本题胜者
+        await supabaseClient
+            .from('battle_rooms')
+            .update({ last_winner: battlePlayerName })
+            .eq('id', battleRoomId)
+            .eq('current_question', targetName)
+            .is('last_winner', null);
+        
         await addBattleScore();
         
         if (data.mode === 'score') {
@@ -1514,28 +1566,44 @@ battleSubmitLock = false;
                 generateOwnQuestion();
             }, 800);
         } else {
-            // 竞速模式：只有房主写下一题
-            if (battlePlayerNumber === 1) {
-                const { data: room2 } = await supabaseClient
-                    .from('battle_rooms')
-                    .select('question_seq')
-                    .eq('id', battleRoomId)
-                    .single();
-                
-                battleQuestionIndex = (room2?.question_seq || 0) + 1;
-                const nextQ = getRandomBattleQuestion();
-                battleLastQuestion = nextQ;
-                
-                await supabaseClient
-                    .from('battle_rooms')
-                    .update({
-                        current_question: nextQ,
-                        question_seq: battleQuestionIndex,
-                        player1_giveup: false,
-                        player2_giveup: false
-                    })
-                    .eq('id', battleRoomId);
+            // 竞速模式：占坑成功者写下一题
+            const oldQ = targetName;
+            
+            const { data: room2 } = await supabaseClient
+                .from('battle_rooms')
+                .select('question_seq, current_question, last_winner')
+                .eq('id', battleRoomId)
+                .single();
+            
+            // 检查是否是自己占的坑
+            const iWonThisRound = room2 && room2.last_winner === battlePlayerName && room2.current_question === oldQ;
+            
+            if (!iWonThisRound) {
+                // 对方先占坑 → 回滚自己刚加的分
+                const rollbackField = battlePlayerNumber === 1 ? 'player1_score' : 'player2_score';
+                await supabaseClient.rpc('decrement_score', {
+                    room_id: battleRoomId,
+                    score_field: rollbackField
+                }).catch(() => {});
+                return;
             }
+            
+            const nextSeq = (room2.question_seq || 0) + 1;
+            battleQuestionIndex = nextSeq;
+            const nextQ = getRandomBattleQuestion();
+            
+            await supabaseClient
+                .from('battle_rooms')
+                .update({
+                    current_question: nextQ,
+                    question_seq: nextSeq,
+                    last_winner: null,
+                    player1_giveup: false,
+                    player2_giveup: false
+                })
+                .eq('id', battleRoomId)
+                .eq('current_question', oldQ)
+                .eq('last_winner', battlePlayerName);
         }
     } else {
         playSound('wrong');
@@ -1801,22 +1869,32 @@ async function giveUpBattle() {
     // 先查询对方是否已经放弃
     const { data: current } = await supabaseClient
         .from('battle_rooms')
-        .select('player1_giveup, player2_giveup')
+        .select('player1_giveup, player2_giveup, question_seq, current_question')
         .eq('id', battleRoomId)
         .single();
     
     if (current && current[otherField]) {
-        // 对方已放弃，双方都放弃，不显示"你已放弃"
+        // 双方都放弃 → 换新题（不加分）
         document.getElementById('battleQuestion').textContent = '🏳️ 双方都放弃，换新题...';
+        
+        const nextSeq = (current.question_seq || 0) + 1;
+        battleQuestionIndex = nextSeq;
+        const nextQ = getRandomBattleQuestion();
+        
         await supabaseClient
             .from('battle_rooms')
-            .update({ 
+            .update({
                 [field]: true,
-                current_question: null
+                current_question: nextQ,
+                question_seq: nextSeq,
+                last_winner: null,
+                player1_giveup: false,
+                player2_giveup: false
             })
-            .eq('id', battleRoomId);
+            .eq('id', battleRoomId)
+            .eq('current_question', current.current_question);
     } else {
-        // 对方还没放弃，显示"你已放弃"
+        // 只有自己放弃 → 标记，等对方答对
         document.getElementById('battleQuestion').textContent = '🏳️ 你已放弃，等待对方...';
         await supabaseClient
             .from('battle_rooms')
