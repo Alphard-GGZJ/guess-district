@@ -1623,7 +1623,24 @@ async function startScoreBattle() {
     }, 1000);
 
     if (battleQuestionIndex === 0) {
-        battleQuestionIndex = 1;
+        // 双方都从服务器读 question_seq，保证一致
+        const { data: room } = await supabaseClient
+            .from('battle_rooms')
+            .select('question_seq')
+            .eq('id', battleRoomId)
+            .single();
+
+        // 首次：房主写 question_seq = 1
+        if (battlePlayerNumber === 1 && (!room || room.question_seq === 0)) {
+            await supabaseClient
+                .from('battle_rooms')
+                .update({ question_seq: 1 })
+                .eq('id', battleRoomId);
+            battleQuestionIndex = 1;
+        } else {
+            battleQuestionIndex = room?.question_seq || 1;
+        }
+
         const firstQ = getRandomBattleQuestion();
         battleOwnQuestion = firstQ;
         battleCurrentQuestionId = firstQ;
@@ -1643,7 +1660,23 @@ async function generateOwnQuestion() {
     if (!battleRoomId) return;
     if (battleMode !== 'score') return;
 
-    battleQuestionIndex++;
+    // 从服务器读当前题号
+    const { data: room } = await supabaseClient
+        .from('battle_rooms')
+        .select('question_seq')
+        .eq('id', battleRoomId)
+        .single();
+
+    battleQuestionIndex = (room?.question_seq || 0) + 1;
+
+    // 房主写回服务器
+    if (battlePlayerNumber === 1) {
+        await supabaseClient
+            .from('battle_rooms')
+            .update({ question_seq: battleQuestionIndex })
+            .eq('id', battleRoomId);
+    }
+
     battleOwnQuestion = getRandomBattleQuestion();
     battleCurrentQuestionId = battleOwnQuestion;
 
@@ -1949,7 +1982,9 @@ function showBattleHistory() {
 
 function getRandomBattleQuestion() {
     const pool = battleRange === 'city' ? getCityPool() : Object.keys(ADJACENCY);
-    return pool[Math.floor(Math.random() * pool.length)];
+    // 用 roomId + 题号做种子，双方同题号 → 同题
+    const seed = mulberry32(hashString(battleRoomId + '_q_' + battleQuestionIndex));
+    return pool[Math.floor(seed() * pool.length)];
 }
 
 function hashString(str) {
@@ -1961,7 +1996,6 @@ function hashString(str) {
     return hash >>> 0;
 }
 
-// mulberry32 伪随机数生成器
 function mulberry32(a) {
     return function() {
         a |= 0;
