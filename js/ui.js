@@ -944,35 +944,80 @@ function loadBattleDistrict(name) {
     
     lastLoadRequest = { type: 'battle', name: name };
     
-    const baseName = name.replace(/（.+?）$/, '');
+    const bm = name.match(/（(.+?)）$/);
+    const baseName = bm ? name.replace(/（.+?）$/, '') : name;
+    const parentName = bm ? bm[1] : null;
     
-    // 有缓存直接用
-    if (battleDistrictCache[baseName]) {
-        displayBattleDistrict(battleDistrictCache[baseName], name);
+    const cacheKey = name;
+    
+    if (battleDistrictCache[cacheKey]) {
+        displayBattleDistrict(battleDistrictCache[cacheKey], name);
         return;
     }
     
-    let retry = 5;
-    function attempt() {
-        ds.search(baseName, (status, result) => {
-            if (status === 'complete' && result.districtList && result.districtList.length > 0) {
-                let d;
-                if (battleRange === 'city') {
-                    d = result.districtList.find(x => x.level === 'city') || result.districtList[0];
-                } else {
-                    d = result.districtList.find(x => x.level === 'district') || result.districtList[0];
+    // 有 parentName：先确定城市 code，再从城市下辖区县找
+    if (parentName) {
+        const cityCode = getCityCode(parentName);
+        if (cityCode) {
+            dsCity.search(cityCode + '00', (s2, r2) => {
+                if (s2 === 'complete' && r2.districtList.length > 0) {
+                    const subs = r2.districtList[0].districtList || [];
+                    const found = subs.find(s => s.name === baseName && s.level === 'district');
+                    
+                    if (found) {
+                        ds.search(found.adcode, (s3, r3) => {
+                            if (s3 === 'complete' && r3.districtList.length > 0) {
+                                const d = r3.districtList[0];
+                                if (d && d.boundaries && d.boundaries.length > 0) {
+                                    battleDistrictCache[cacheKey] = d;
+                                    displayBattleDistrict(d, name);
+                                }
+                            }
+                        });
+                        return;
+                    }
                 }
-                if (d && d.boundaries && d.boundaries.length > 0) {
-                    battleDistrictCache[baseName] = d;
-                    displayBattleDistrict(d, name);
-                }
-            } else if (retry > 0) {
-                retry--;
-                setTimeout(attempt, 400);
-            }
-        });
+                // 找不到，走兜底
+                fallback();
+            });
+            return;
+        }
     }
-    attempt();
+    
+    fallback();
+    
+    function fallback() {
+        let retry = 5;
+        function attempt() {
+            ds.search(baseName, (status, result) => {
+                if (status === 'complete' && result.districtList && result.districtList.length > 0) {
+                    let d;
+                    if (battleRange === 'city') {
+                        d = result.districtList.find(x => x.level === 'city') || result.districtList[0];
+                    } else {
+                        if (parentName) {
+                            d = result.districtList.find(x => {
+                                if (x.level !== 'district') return false;
+                                const city = getCityName(x.adcode);
+                                return city.includes(parentName) || parentName.includes(city);
+                            });
+                        }
+                        if (!d) {
+                            d = result.districtList.find(x => x.level === 'district');
+                        }
+                    }
+                    if (d && d.boundaries && d.boundaries.length > 0) {
+                        battleDistrictCache[cacheKey] = d;
+                        displayBattleDistrict(d, name);
+                    }
+                } else if (retry > 0) {
+                    retry--;
+                    setTimeout(attempt, 400);
+                }
+            });
+        }
+        attempt();
+    }
 }
 
 function displayBattleDistrict(d, originalName) {
@@ -982,7 +1027,6 @@ function displayBattleDistrict(d, originalName) {
         battleCurrentDisplayed = d.name;
     }
     
-    // 清除旧地图
     if (typeof clearMap === 'function') {
         clearMap();
     }
