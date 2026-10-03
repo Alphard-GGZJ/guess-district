@@ -163,6 +163,27 @@
     <div style="display:flex;gap:6px;margin-bottom:8px;">
         <input type="text" id="quizQueryInput" placeholder="输入区县名..." autocomplete="off" style="flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:5px;font-size:13px;">
         <button id="quizQueryBtn" style="padding:6px 12px;border:none;border-radius:5px;background:#4a6cf7;color:white;cursor:pointer;font-size:13px;">查询</button>
+        <button id="quizRandomBtn" style="padding:6px 12px;border:none;border-radius:5px;background:#8b5cf6;color:white;cursor:pointer;font-size:13px;">🎲 随机</button>
+    </div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <label for="quizRandomRegion" style="flex:0 0 60px;color:#666;font-size:12px;line-height:28px;">大区</label>
+        <select id="quizRandomRegion" style="flex:1;padding:4px 6px;border:1px solid #ccc;border-radius:5px;font-size:12px;">
+            <option value="all">🌏 全国</option>
+            <option value="north">🏔️ 华北</option>
+            <option value="northeast">❄️ 东北</option>
+            <option value="east">🌊 华东</option>
+            <option value="central">🏮 华中</option>
+            <option value="south">🌴 华南</option>
+            <option value="southwest">⛰️ 西南</option>
+            <option value="northwest">🏜️ 西北</option>
+        </select>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <label for="quizRandomProvince" style="flex:0 0 60px;color:#666;font-size:12px;line-height:28px;">省份</label>
+        <select id="quizRandomProvince" style="flex:1;padding:4px 6px;border:1px solid #ccc;border-radius:5px;font-size:12px;">
+            <option value="all">全部省份</option>
+        </select>
     </div>
     <div style="font-size:11px;color:#999;margin-bottom:8px;">💡 示例：<code>东城区</code>、<code>市中区（内江市）</code>、<code>城区（汕尾市）</code></div>
 
@@ -189,6 +210,12 @@
     <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
         <label style="flex:0 0 80px;color:#666;font-size:12px;">初始数字颜色</label>
         <input type="color" id="quizDefaultNumColor" value="#FF0000" style="flex:1;height:28px;border:1px solid #ccc;border-radius:5px;cursor:pointer;">
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+        <label style="flex:0 0 96px;color:#666;font-size:12px;">初始填充透明度</label>
+        <input type="range" id="quizFillOpacity" min="0" max="100" value="35" style="flex:1;">
+        <span id="quizFillOpacityVal" style="width:30px;text-align:right;font-size:12px;">35</span>
     </div>
 
     <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
