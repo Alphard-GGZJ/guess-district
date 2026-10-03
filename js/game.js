@@ -979,6 +979,14 @@ function showDistrict(district) {
         console.warn('地图未初始化');
         return;
     }
+
+    // 出题模式：把结果交给 quizAddRegion，不进入正常游戏流程
+    if (typeof window._quizIntercept === 'function') {
+        var cb = window._quizIntercept;
+        window._quizIntercept = null;
+        cb(district);
+        return;
+    }
     
     if (!district || !district.boundaries || district.boundaries.length === 0) {
         setMsg('加载失败，换一个', 'wrong');
@@ -1282,7 +1290,7 @@ const SHORT_NAME_ADCODE = {
     '大柴旦行政委员会': ['632825'],
 };
 
-function loadDistrict(name) {
+function loadDistrict(name, forceDistrict) {
     // 特例：高德返回"海西蒙古族藏族自治州直辖"，统一用"大柴旦行政委员会"
     if (name === '海西蒙古族藏族自治州直辖') {
         name = '大柴旦行政委员会';
@@ -1299,7 +1307,7 @@ function loadDistrict(name) {
     clearMap();
     const tl = ++loadId;
 
-    if (gameMode === 'easy' && !dailyMode) {
+    if (!forceDistrict && gameMode === 'easy' && !dailyMode) {
         dsProvince.search(name, (status, result) => {
             if (tl !== loadId) return;
             if (status === 'complete' && result.districtList.length > 0) {
@@ -1311,7 +1319,7 @@ function loadDistrict(name) {
         return;
     }
 
-    if (gameMode === 'normal' && !dailyMode) {
+    if (!forceDistrict && gameMode === 'normal' && !dailyMode) {
         dsCity.search(name, (status, result) => {
             if (tl !== loadId) return;
             if (status === 'complete' && result.districtList.length > 0) {

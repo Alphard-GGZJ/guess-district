@@ -172,6 +172,31 @@ document.getElementById('quizQueryBtn').addEventListener('click', quizDoQuery);
 document.getElementById('quizQueryInput').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') quizDoQuery();
 });
+document.getElementById('quizRandomBtn').addEventListener('click', quizRandomPick);
+
+// 随机范围的省份下拉初始化
+(function initQuizRandomProvinces() {
+    var sel = document.getElementById('quizRandomProvince');
+    if (!sel) return;
+    ['北京市','天津市','河北省','山西省','内蒙古','辽宁省','吉林省','黑龙江省','上海市','江苏省','浙江省','安徽省','福建省','江西省','山东省','河南省','湖北省','湖南省','广东省','广西','海南省','重庆市','四川省','贵州省','云南省','西藏','陕西省','甘肃省','青海省','宁夏','新疆','香港','澳门'].forEach(function(p) {
+        var opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        sel.appendChild(opt);
+    });
+})();
+
+// 大区变化时重置省份
+document.getElementById('quizRandomRegion').addEventListener('change', function() {
+    document.getElementById('quizRandomProvince').value = 'all';
+});
+
+// 省份变化时重置大区
+document.getElementById('quizRandomProvince').addEventListener('change', function() {
+    if (this.value !== 'all') {
+        document.getElementById('quizRandomRegion').value = 'all';
+    }
+});
 document.getElementById('quizSaveBtn').addEventListener('click', quizSaveImage);
 document.getElementById('quizPreviewBtn').addEventListener('click', quizPreviewImage);
 document.getElementById('quizClearBtn').addEventListener('click', quizClearAll);
@@ -197,6 +222,13 @@ document.getElementById('quizNameFontSize').addEventListener('input', function()
 
 document.getElementById('quizNameColor').addEventListener('input', function() {
     // 只作为后续新增区域的默认名称颜色，不影响已添加区域
+});
+
+document.getElementById('quizFillOpacity').addEventListener('input', function() {
+    var v = parseInt(this.value);
+    if (!isFinite(v) || v < 0) return;
+    document.getElementById('quizFillOpacityVal').textContent = v;
+    // 只作为后续新增区域的默认透明度，不影响已添加区域
 });
 
 document.getElementById('homeBtnDaily').addEventListener('click', () => {
@@ -542,6 +574,11 @@ function quizCleanup() {
     var dn = document.getElementById('quizDefaultNumColor');
     if (dn) dn.value = '#FF0000';
 
+    var fo = document.getElementById('quizFillOpacity');
+    if (fo) fo.value = '35';
+    var fov = document.getElementById('quizFillOpacityVal');
+    if (fov) fov.textContent = '35';
+
     var sn = document.getElementById('quizShowNames');
     if (sn) sn.checked = false;
 
@@ -554,6 +591,144 @@ function quizCleanup() {
     if (tf) tf.value = '24';
     var tc = document.getElementById('quizTextColor');
     if (tc) tc.value = '#000000';
+
+    // 重置随机范围
+    var rr = document.getElementById('quizRandomRegion');
+    if (rr) rr.value = 'all';
+    var rp = document.getElementById('quizRandomProvince');
+    if (rp) rp.value = 'all';
+
+    // 清掉出题模式的拦截，避免影响其他模式
+    window._quizIntercept = null;
+}
+
+// 大区 → 省份列表
+var QUIZ_REGION_PROVINCES = {
+    'north': ['北京市', '天津市', '河北省', '山西省', '内蒙古自治区'],
+    'northeast': ['辽宁省', '吉林省', '黑龙江省'],
+    'east': ['上海市', '江苏省', '浙江省', '安徽省', '福建省', '江西省', '山东省'],
+    'central': ['河南省', '湖北省', '湖南省'],
+    'south': ['广东省', '广西壮族自治区', '海南省'],
+    'southwest': ['重庆市', '四川省', '贵州省', '云南省', '西藏自治区'],
+    'northwest': ['陕西省', '甘肃省', '青海省', '宁夏回族自治区', '新疆维吾尔自治区']
+};
+
+var QUIZ_PROVINCE_FULL = {
+    '内蒙古': '内蒙古自治区',
+    '广西': '广西壮族自治区',
+    '西藏': '西藏自治区',
+    '宁夏': '宁夏回族自治区',
+    '新疆': '新疆维吾尔自治区',
+    '香港': '香港特别行政区',
+    '澳门': '澳门特别行政区'
+};
+
+function quizRandomPick() {
+    playSound('click');
+
+    var region = document.getElementById('quizRandomRegion').value;
+    var province = document.getElementById('quizRandomProvince').value;
+
+    // 1. 确定省份列表（和主游戏一样的逻辑）
+    var provinceList = [];
+
+    if (province !== 'all') {
+        var full = QUIZ_PROVINCE_FULL[province] || province;
+        provinceList = [full];
+    } else if (region !== 'all') {
+        provinceList = QUIZ_REGION_PROVINCES[region] || [];
+    } else {
+        provinceList = [
+            '北京市', '天津市', '河北省', '山西省', '内蒙古自治区',
+            '辽宁省', '吉林省', '黑龙江省',
+            '上海市', '江苏省', '浙江省', '安徽省', '福建省', '江西省', '山东省',
+            '河南省', '湖北省', '湖南省',
+            '广东省', '广西壮族自治区', '海南省',
+            '重庆市', '四川省', '贵州省', '云南省', '西藏自治区',
+            '陕西省', '甘肃省', '青海省', '宁夏回族自治区', '新疆维吾尔自治区'
+        ];
+    }
+
+    if (provinceList.length === 0) {
+        alert('该范围没有省份');
+        return;
+    }
+
+    // 2. 收集所有市的 code
+    var allCityCodes = [];
+    provinceList.forEach(function(p) {
+        var codes = getCitiesByProvince(p);
+        if (codes && codes.length > 0) {
+            allCityCodes = allCityCodes.concat(codes);
+        }
+    });
+
+    if (allCityCodes.length === 0) {
+        alert('该范围没有城市数据');
+        return;
+    }
+
+    // 3. 随机打乱市 code，依次尝试，直到拿到一个未添加过的区县
+    var shuffledCodes = allCityCodes.slice().sort(function() { return Math.random() - 0.5; });
+    var tried = 0;
+    var maxTry = Math.min(shuffledCodes.length, 20);
+
+    function tryNext() {
+        if (tried >= maxTry) {
+            alert('该范围内没找到可抽取的新区县');
+            return;
+        }
+        var cityCode = shuffledCodes[tried++];
+
+        dsCity.search(cityCode, function(status, result) {
+            if (status !== 'complete' || !result.districtList || result.districtList.length === 0) {
+                tryNext();
+                return;
+            }
+
+            var subs = (result.districtList[0].districtList || []).filter(function(d) {
+                return d.level === 'district' && d.name;
+            });
+
+            if (subs.length === 0) {
+                tryNext();
+                return;
+            }
+
+            // 排除已添加的区县名
+            var available = subs.filter(function(d) {
+                return !quizRegions.some(function(r) {
+                    // 题目名可能是 区县 或 区县（市）
+                    var base = r.name.replace(/（.+?）$/, '');
+                    return base === d.name;
+                });
+            });
+
+            if (available.length === 0) {
+                tryNext();
+                return;
+            }
+
+            var pick = available[Math.floor(Math.random() * available.length)];
+            var pickName = pick.name;
+
+            // 如果 ADJACENCY 里有带括号的同名键，优先用带括号版本
+            var parenKey = Object.keys(ADJACENCY).find(function(k) {
+                return k.includes('（' + pick.name + '）');
+            });
+            if (parenKey) {
+                pickName = parenKey;
+            } else if (Object.keys(ADJACENCY).indexOf(pick.name) !== -1) {
+                pickName = pick.name;
+            }
+
+            // 填入输入框并触发查询
+            document.getElementById('quizQueryInput').value = pickName;
+            quizDoQuery();
+        });
+    }
+
+    tryNext();
 }
 
 function quizDoQuery() {
@@ -567,62 +742,17 @@ function quizDoQuery() {
         return;
     }
 
-    var adcodes = (typeof SHORT_NAME_ADCODE !== 'undefined') ? SHORT_NAME_ADCODE[raw] : null;
-    if (adcodes && adcodes.length > 0) {
-        quizSearchByAdcode(raw, adcodes[0]);
-        return;
-    }
-
-    var bm = raw.match(/（(.+?)）$/);
-    var baseName = bm ? raw.replace(/（.+?）$/, '') : raw;
-    var parentName = bm ? bm[1] : null;
-
-    ds.search(baseName, function(status, result) {
-        if (status !== 'complete' || !result.districtList || result.districtList.length === 0) {
-            alert('未找到：' + raw);
-            return;
-        }
-
-        var d = null;
-
-        d = result.districtList.find(function(x) {
-            return x.level === 'district' && x.name === baseName;
-        });
-
-        if (!d && parentName) {
-            d = result.districtList.find(function(x) {
-                if (x.level !== 'district') return false;
-                if (x.name !== baseName) return false;
-                return true;
-            });
-        }
-
-        if (!d) {
-            d = result.districtList.find(function(x) { return x.level === 'district'; });
-        }
-
-        if (!d || !d.boundaries || d.boundaries.length === 0) {
+    // 拦截 showDistrict：让它把结果交给 quizAddRegion
+    window._quizIntercept = function(district) {
+        if (!district || !district.boundaries || district.boundaries.length === 0) {
             alert('该区域无边界数据');
             return;
         }
+        quizAddRegion(raw, district);
+    };
 
-        quizAddRegion(raw, d);
-    });
-}
-
-function quizSearchByAdcode(raw, adcode) {
-    ds.search(adcode, function(status, result) {
-        if (status !== 'complete' || !result.districtList || result.districtList.length === 0) {
-            alert('未找到：' + raw);
-            return;
-        }
-        var d = result.districtList.find(function(x) { return x.level === 'district'; }) || result.districtList[0];
-        if (!d || !d.boundaries || d.boundaries.length === 0) {
-            alert('该区域无边界数据');
-            return;
-        }
-        quizAddRegion(raw, d);
-    });
+    // 直接复用看图猜区县的地图加载逻辑，强制走区县级搜索
+    loadDistrict(raw, true);
 }
 
 function quizAddRegion(name, district) {
@@ -634,6 +764,10 @@ function quizAddRegion(name, district) {
     var borderColor = defaultBorderEl ? defaultBorderEl.value : '#000000';
     var numColorInit = defaultNumColorEl ? defaultNumColorEl.value : color;
 
+    var fillOpacityInit = parseInt(document.getElementById('quizFillOpacity').value);
+    if (!isFinite(fillOpacityInit) || fillOpacityInit < 0) fillOpacityInit = 35;
+    var fillOpacityVal = fillOpacityInit / 100;
+
     var polys = district.boundaries.map(function(b) {
         return new AMap.Polygon({
             map: map,
@@ -641,7 +775,7 @@ function quizAddRegion(name, district) {
             strokeColor: borderColor,
             strokeWeight: 2,
             fillColor: color,
-            fillOpacity: 0.35
+            fillOpacity: fillOpacityVal
         });
     });
 
@@ -710,6 +844,7 @@ function quizAddRegion(name, district) {
         name: name,
         color: color,
         borderColor: borderColor,
+        fillOpacity: fillOpacityVal,
         adcode: district.adcode,
         boundaries: district.boundaries,
         center: center,
@@ -760,9 +895,9 @@ function quizRenderList() {
 
         // 第二行：控件
         var item = document.createElement('div');
-        item.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap;';
+        item.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:12px;flex-wrap:wrap;';
 
-        // ===== 区域颜色组：填充 + 边框 =====
+        // ===== 区域颜色组：填充 + 边框 + 透明度 =====
         var groupColor = document.createElement('div');
         groupColor.style.cssText = 'display:flex;align-items:center;gap:4px;padding-right:8px;';
 
@@ -787,6 +922,22 @@ function quizRenderList() {
             r.polygon.forEach(function(p) { p.setOptions({ strokeColor: r.borderColor }); });
         });
         groupColor.appendChild(swatchBorder);
+
+        var opacityInput = document.createElement('input');
+        opacityInput.type = 'number';
+        opacityInput.min = '0';
+        opacityInput.max = '100';
+        opacityInput.value = (r.fillOpacity !== undefined) ? Math.round(r.fillOpacity * 100) : 35;
+        opacityInput.title = '填充透明度（0-100）';
+        opacityInput.style.cssText = 'width:30px;padding:2px 0;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:center;';
+        opacityInput.addEventListener('input', function() {
+            var v = parseInt(this.value);
+            if (!isFinite(v) || v < 0) return;
+            if (v > 100) v = 100;
+            r.fillOpacity = v / 100;
+            r.polygon.forEach(function(p) { p.setOptions({ fillOpacity: r.fillOpacity }); });
+        });
+        groupColor.appendChild(opacityInput);
 
         item.appendChild(groupColor);
 
@@ -815,7 +966,7 @@ function quizRenderList() {
         nameSize.min = '0';
         nameSize.value = (r.nameSize !== undefined) ? r.nameSize : 14;
         nameSize.title = '名称字号（0 隐藏名称）';
-        nameSize.style.cssText = 'width:44px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:center;';
+        nameSize.style.cssText = 'width:30px;padding:2px 0;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:center;';
         nameSize.addEventListener('input', function() {
             var v = parseInt(this.value);
             if (!isFinite(v) || v < 0) return;
@@ -845,7 +996,7 @@ function quizRenderList() {
         numInput.type = 'text';
         numInput.value = r.numText;
         numInput.title = '数字内容';
-        numInput.style.cssText = 'width:44px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:center;';
+        numInput.style.cssText = 'width:30px;padding:2px 0;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:center;';
         numInput.addEventListener('input', function() {
             r.numText = this.value;
             if (r.numLabel) r.numLabel.setText(this.value);
@@ -868,7 +1019,7 @@ function quizRenderList() {
         numSize.min = '0';
         numSize.value = r.numSize;
         numSize.title = '数字字号（0 隐藏数字）';
-        numSize.style.cssText = 'width:44px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:center;';
+        numSize.style.cssText = 'width:30px;padding:2px 0;border:1px solid #ccc;border-radius:4px;font-size:12px;text-align:center;';
         numSize.addEventListener('input', function() {
             var v = parseInt(this.value);
             if (!isFinite(v) || v < 0) return;
@@ -988,7 +1139,8 @@ function quizRenderCanvas() {
             ctx.strokeStyle = r.borderColor || '#000000';
             ctx.lineWidth = 2;
             ctx.stroke();
-            ctx.fillStyle = quizHexToRgba(r.color, 0.35);
+            var op = (r.fillOpacity !== undefined) ? r.fillOpacity : 0.35;
+            ctx.fillStyle = quizHexToRgba(r.color, op);
             ctx.fill();
         });
     });
@@ -2081,6 +2233,11 @@ function displayBattleDistrict(d, originalName) {
     
     if (typeof clearMap === 'function') {
         clearMap();
+    }
+
+    // 保险：清掉出题模式的拦截，避免对战地图被误拦截
+    if (typeof window._quizIntercept === 'function') {
+        window._quizIntercept = null;
     }
     
     if (window.innerWidth <= 768) {
