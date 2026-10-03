@@ -1376,6 +1376,7 @@ if (roomData.current_question && roomData.current_question !== battleCurrentDisp
 // ==================== 模式1：竞速对决 ====================
 async function startRaceQuestion() {
     if (!supabaseClient || !battleRoomId) return;
+    if (battlePlayerNumber !== 1) return;   // 只有房主出题
 
     const { data } = await supabaseClient
         .from('battle_rooms')
@@ -1385,19 +1386,17 @@ async function startRaceQuestion() {
 
     if (data && data.current_question) return;
 
-    if (battlePlayerNumber === 1) {
-        battleQuestionIndex = (data?.question_seq || 0) + 1;
-        const firstQ = getRandomBattleQuestion();
-        await supabaseClient
-            .from('battle_rooms')
-            .update({
-                current_question: firstQ,
-                question_seq: battleQuestionIndex,   // ← 同步
-                player1_giveup: false,
-                player2_giveup: false
-            })
-            .eq('id', battleRoomId);
-    }
+    battleQuestionIndex = (data?.question_seq || 0) + 1;
+    const firstQ = getRandomBattleQuestion();
+    await supabaseClient
+        .from('battle_rooms')
+        .update({
+            current_question: firstQ,
+            question_seq: battleQuestionIndex,
+            player1_giveup: false,
+            player2_giveup: false
+        })
+        .eq('id', battleRoomId);
 }
 
 async function submitBattleAnswer() {
@@ -1514,28 +1513,30 @@ battleSubmitLock = false;
                 battleSubmitLock = false;
                 generateOwnQuestion();
             }, 800);
-} else {
-    // 从服务器读题号并 +1
-    const { data: room2 } = await supabaseClient
-        .from('battle_rooms')
-        .select('question_seq')
-        .eq('id', battleRoomId)
-        .single();
-    
-    battleQuestionIndex = (room2?.question_seq || 0) + 1;
-    const nextQ = getRandomBattleQuestion();
-    battleLastQuestion = nextQ;
-    
-    await supabaseClient
-        .from('battle_rooms')
-        .update({
-            current_question: nextQ,
-            question_seq: battleQuestionIndex,   // ← 同步写回
-            player1_giveup: false,
-            player2_giveup: false
-        })
-        .eq('id', battleRoomId);
-}
+        } else {
+            // 竞速模式：只有房主写下一题
+            if (battlePlayerNumber === 1) {
+                const { data: room2 } = await supabaseClient
+                    .from('battle_rooms')
+                    .select('question_seq')
+                    .eq('id', battleRoomId)
+                    .single();
+                
+                battleQuestionIndex = (room2?.question_seq || 0) + 1;
+                const nextQ = getRandomBattleQuestion();
+                battleLastQuestion = nextQ;
+                
+                await supabaseClient
+                    .from('battle_rooms')
+                    .update({
+                        current_question: nextQ,
+                        question_seq: battleQuestionIndex,
+                        player1_giveup: false,
+                        player2_giveup: false
+                    })
+                    .eq('id', battleRoomId);
+            }
+        }
     } else {
         playSound('wrong');
         document.getElementById('battleQuestion').textContent = '❌ 再试试！';
