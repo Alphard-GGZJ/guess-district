@@ -4,6 +4,103 @@
     box-sizing: border-box;
 }
 
+#homeScreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #dfe9f5 0%, #f9fafc 100%);
+    z-index: 999999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+}
+
+#homeScreen {
+    transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+#homeScreen.fade-out {
+    opacity: 0;
+    transform: scale(1.05);
+    pointer-events: none;
+}
+
+#transitionOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #dfe9f5 0%, #f9fafc 100%);
+    z-index: 999998;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+}
+
+#transitionOverlay.show {
+    opacity: 1;
+}
+
+#homeScreen h1 {
+    font-size: 48px;
+    color: #4a6cf7;
+    text-shadow: 0 2px 10px rgba(74, 108, 247, 0.2);
+    margin: 0;
+}
+
+#homeMenu {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 300px;
+}
+
+#homeMenu button {
+    padding: 20px;
+    font-size: 18px;
+    border: none;
+    border-radius: 12px;
+    background: white;
+    color: #333;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+#homeMenu button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+#homeMenu button:active {
+    transform: scale(0.97);
+}
+
+#homeMenu #homeBtnPlay {
+    background: linear-gradient(135deg, #4a6cf7, #6b8aff);
+    color: white;
+}
+
+#homeMenu #homeBtnQuiz {
+    background: linear-gradient(135deg, #10b981, #34d399);
+    color: white;
+}
+
+/* 移动端 */
+@media (max-width: 768px) {
+    #homeScreen h1 {
+        font-size: 32px;
+    }
+    #homeMenu {
+        width: 80vw;
+    }
+}
+
 html, body {
     width: 100%;
     height: 100%;
@@ -17,6 +114,14 @@ html, body {
     top: 0;
     left: 0;
     z-index: 1;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#map.visible {
+    visibility: visible;
+    opacity: 1;
 }
 
 #panel {
@@ -33,6 +138,14 @@ html, body {
     max-height: calc(100vh - 20px);
     overflow-y: auto;
     box-sizing: border-box;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#panel.visible {
+    visibility: visible;
+    opacity: 1;
 }
 
 #panel h3 {
@@ -653,7 +766,7 @@ body {
     right: 10px;
     font-size: 24px;
     color: rgba(0, 0, 0, 0.3);
-    z-index: 9999;
+    z-index: 9999999;
     pointer-events: none;
     user-select: none;
     font-family: "Microsoft YaHei", Arial, sans-serif;
