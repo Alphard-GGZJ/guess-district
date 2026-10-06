@@ -43,7 +43,13 @@ let mobileNeighborData = [];
 let dailyWrongAnswers = [];
 let dailyCorrectAnswers = [];
 
-const districtPool = Object.keys(ADJACENCY);
+const DISTRICT_LEVEL_EXCLUDE = [
+    '东莞市', '中山市', '嘉峪关市', '儋州市'
+];
+
+const districtPool = Object.keys(ADJACENCY).filter(function(name) {
+    return DISTRICT_LEVEL_EXCLUDE.indexOf(name) === -1;
+});
 
 const provinceOfficialNames = [
     '北京市','天津市','河北省','山西省','内蒙古自治区',
@@ -398,13 +404,13 @@ function matchForMode(input, forceMode) {
     const mode = forceMode || gameMode;
 
     if (dailyMode) {
-        pool = Object.keys(ADJACENCY);
+        pool = dailyCityMode ? getCityPool() : districtPool;
     } else if (mode === 'easy') {
         pool = provinceOfficialNames;
     } else if (mode === 'normal') {
         pool = getCityPool();
     } else {
-        pool = Object.keys(ADJACENCY);
+        pool = districtPool;
     }
 
     const exact = [];
@@ -852,8 +858,8 @@ function getCityPool() {
         '福州市','厦门市','莆田市','三明市','泉州市','漳州市','南平市','龙岩市','宁德市',
         '南昌市','景德镇市','萍乡市','九江市','新余市','鹰潭市','赣州市','吉安市','宜春市','抚州市','上饶市',
         '济南市','青岛市','淄博市','枣庄市','东营市','烟台市','潍坊市','济宁市','泰安市','威海市','日照市','临沂市','德州市','聊城市','滨州市','菏泽市',
-        '郑州市','开封市','洛阳市','平顶山市','安阳市','鹤壁市','新乡市','焦作市','濮阳市','许昌市','漯河市','三门峡市','南阳市','商丘市','信阳市','周口市','驻马店市','济源市',
-        '武汉市','黄石市','十堰市','宜昌市','襄阳市','鄂州市','荆门市','孝感市','荆州市','黄冈市','咸宁市','随州市','恩施土家族苗族自治州','仙桃市','潜江市','天门市','神农架林区',
+        '郑州市','开封市','洛阳市','平顶山市','安阳市','鹤壁市','新乡市','焦作市','濮阳市','许昌市','漯河市','三门峡市','南阳市','商丘市','信阳市','周口市','驻马店市',
+        '武汉市','黄石市','十堰市','宜昌市','襄阳市','鄂州市','荆门市','孝感市','荆州市','黄冈市','咸宁市','随州市','恩施土家族苗族自治州',
         '长沙市','株洲市','湘潭市','衡阳市','邵阳市','岳阳市','常德市','张家界市','益阳市','郴州市','永州市','怀化市','娄底市','湘西土家族苗族自治州',
         '广州市','韶关市','深圳市','珠海市','汕头市','佛山市','江门市','湛江市','茂名市','肇庆市','惠州市','梅州市','汕尾市','河源市','阳江市','清远市','东莞市','中山市','潮州市','揭阳市','云浮市',
         '南宁市','柳州市','桂林市','梧州市','北海市','防城港市','钦州市','贵港市','玉林市','百色市','贺州市','河池市','来宾市','崇左市',
@@ -987,6 +993,14 @@ function showDistrict(district) {
         cb(district);
         return;
     }
+
+    // 头像搜索：把结果交给 _avatarIntercept，不进入正常游戏流程
+    if (typeof window._avatarIntercept === 'function') {
+        var cb2 = window._avatarIntercept;
+        window._avatarIntercept = null;
+        cb2(district);
+        return;
+    }
     
     if (!district || !district.boundaries || district.boundaries.length === 0) {
         setMsg('加载失败，换一个', 'wrong');
@@ -1080,16 +1094,25 @@ function drawDistrictOnCanvas(district) {
     });
     
     const padding = 20;
-    const scaleX = (canvas.width - padding * 2) / (maxX - minX);
-    const scaleY = (canvas.height - padding * 2) / (maxY - minY);
+
+    // 修正经纬度比例，避免纵向拉伸
+    const centerLat = (minY + maxY) / 2;
+    const cosLat = Math.cos(centerLat * Math.PI / 180);
+    const cosLatSafe = cosLat < 0.01 ? 0.01 : cosLat;
+
+    const rangeX = (maxX - minX) * cosLatSafe;
+    const rangeY = maxY - minY;
+
+    const scaleX = (canvas.width - padding * 2) / rangeX;
+    const scaleY = (canvas.height - padding * 2) / rangeY;
     const scale = Math.min(scaleX, scaleY);
     
-    const offsetX = (canvas.width - (maxX - minX) * scale) / 2;
-    const offsetY = (canvas.height - (maxY - minY) * scale) / 2;
+    const offsetX = (canvas.width - rangeX * scale) / 2;
+    const offsetY = (canvas.height - rangeY * scale) / 2;
     
     function toCanvas(lng, lat) {
         return [
-            offsetX + (lng - minX) * scale,
+            offsetX + (lng - minX) * cosLatSafe * scale,
             canvas.height - offsetY - (lat - minY) * scale
         ];
     }
@@ -1145,16 +1168,25 @@ function drawNeighborsOnCanvas(neighborData, targetDistrict) {
     });
     
     const padding = 20;
-    const scaleX = (canvas.width - padding * 2) / (maxX - minX);
-    const scaleY = (canvas.height - padding * 2) / (maxY - minY);
+
+    // 修正经纬度比例，避免纵向拉伸
+    const centerLat = (minY + maxY) / 2;
+    const cosLat = Math.cos(centerLat * Math.PI / 180);
+    const cosLatSafe = cosLat < 0.01 ? 0.01 : cosLat;
+
+    const rangeX = (maxX - minX) * cosLatSafe;
+    const rangeY = maxY - minY;
+
+    const scaleX = (canvas.width - padding * 2) / rangeX;
+    const scaleY = (canvas.height - padding * 2) / rangeY;
     const scale = Math.min(scaleX, scaleY);
     
-    const offsetX = (canvas.width - (maxX - minX) * scale) / 2;
-    const offsetY = (canvas.height - (maxY - minY) * scale) / 2;
+    const offsetX = (canvas.width - rangeX * scale) / 2;
+    const offsetY = (canvas.height - rangeY * scale) / 2;
     
     function toCanvas(lng, lat) {
         return [
-            offsetX + (lng - minX) * scale,
+            offsetX + (lng - minX) * cosLatSafe * scale,
             canvas.height - offsetY - (lat - minY) * scale
         ];
     }
@@ -1398,6 +1430,12 @@ function loadDistrict(name, forceDistrict) {
 
                 if (!d) {
                     d = result.districtList.find(x => x.level === 'district');
+                }
+
+                // 兜底：像阿拉尔市、济源市、神农架林区等县级行政区，
+                // 高德把 level 标成 city，这里退回第一个结果
+                if (!d) {
+                    d = result.districtList[0];
                 }
 
                 if (!d) {
@@ -1959,8 +1997,9 @@ if (dailyMode) {
         dailyScoreEl.classList.add('score-bounce');
         setTimeout(() => dailyScoreEl.classList.remove('score-bounce'), 300);
 
-        if (targetDistrict && !dailyCorrectAnswers.includes(targetDistrict.name)) {
-            dailyCorrectAnswers.push(targetDistrict.name);
+        var qName = dailyQuestions[dailyIndex];
+        if (qName && !dailyCorrectAnswers.includes(qName)) {
+            dailyCorrectAnswers.push(qName);
         }
 
         document.getElementById('dailyMsg').textContent = '✅ 正确！';
@@ -2470,22 +2509,34 @@ function drawDistrictAndNeighbors(target, neighbors) {
     });
     
     // 根据提示级别扩大视野
-    const rangeX = maxX - minX;
-    const rangeY = maxY - minY;
-    minX -= rangeX * expandRatio;
-    maxX += rangeX * expandRatio;
-    minY -= rangeY * expandRatio;
-    maxY += rangeY * expandRatio;
+    const rawRangeX = maxX - minX;
+    const rawRangeY = maxY - minY;
+    minX -= rawRangeX * expandRatio;
+    maxX += rawRangeX * expandRatio;
+    minY -= rawRangeY * expandRatio;
+    maxY += rawRangeY * expandRatio;
     
     const pad = 30;
-    const sx = (canvas.width - pad * 2) / (maxX - minX);
-    const sy = (canvas.height - pad * 2) / (maxY - minY);
+
+    // 修正经纬度比例，避免纵向拉伸
+    const centerLat = (minY + maxY) / 2;
+    const cosLat = Math.cos(centerLat * Math.PI / 180);
+    const cosLatSafe = cosLat < 0.01 ? 0.01 : cosLat;
+
+    const rangeX = (maxX - minX) * cosLatSafe;
+    const rangeY = maxY - minY;
+
+    const sx = (canvas.width - pad * 2) / rangeX;
+    const sy = (canvas.height - pad * 2) / rangeY;
     const scale = Math.min(sx, sy);
-    const ox = (canvas.width - (maxX - minX) * scale) / 2;
-    const oy = (canvas.height - (maxY - minY) * scale) / 2;
+    const ox = (canvas.width - rangeX * scale) / 2;
+    const oy = (canvas.height - rangeY * scale) / 2;
     
     function toXY(lng, lat) {
-        return [ox + (lng - minX) * scale, canvas.height - oy - (lat - minY) * scale];
+        return [
+            ox + (lng - minX) * cosLatSafe * scale,
+            canvas.height - oy - (lat - minY) * scale
+        ];
     }
     
     function drawPolygon(boundaries, stroke, fill, width) {
@@ -2589,6 +2640,13 @@ function playSound(type) {
         } else if (type === 'ready') {
             tone(600, 0, 0.12, 'sine', 0.2);
             tone(900, 0.1, 0.18, 'sine', 0.22);
+        } else if (type === 'delete') {
+            tone(500, 0, 0.08, 'triangle', 0.2);
+            tone(300, 0.08, 0.12, 'triangle', 0.18);
+        } else if (type === 'clear') {
+            tone(400, 0, 0.08, 'square', 0.18);
+            tone(300, 0.08, 0.08, 'square', 0.18);
+            tone(200, 0.16, 0.15, 'square', 0.18);
         }
     } catch (e) {
         // 忽略音频错误
