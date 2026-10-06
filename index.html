@@ -12,7 +12,11 @@
 
 <div id="homeScreen">
     <h1>🗺️ 看图猜区县</h1>
+    <div id="homeAvatarDisplay" style="width:80px;height:80px;border-radius:50%;overflow:hidden;margin-bottom:10px;cursor:pointer;border:3px solid #4a6cf7;background:#dfe9f5;display:flex;align-items:center;justify-content:center;" title="点击更换头像">
+        <span style="color:#999;font-size:13px;">点头像</span>
+    </div>
     <div id="homeMenu">
+        <button id="homeBtnAvatar" style="background:linear-gradient(135deg,#06b6d4,#22d3ee);color:white;">🙂 我的头像</button>
         <button id="homeBtnPlay">🎮 看图猜区县</button>
         <button id="homeBtnQuiz">📝 出题模式</button>
         <button id="homeBtnDaily">📅 每日挑战</button>
@@ -114,8 +118,9 @@
     <h3>🎮 小游戏</h3>
     <div id="miniGamesList">
         <button id="btnFindDifferent" style="display:block;width:100%;margin:6px 0;padding:12px;background:#4a6cf7;color:white;border:none;border-radius:8px;cursor:pointer;">🔍 地级市找不同</button>
-        <button id="btnCoastInland" style="display:block;width:100%;margin:6px 0;padding:12px;background:#10b981;color:white;border:none;border-radius:8px;cursor:pointer;">🌊 沿海或内陆（敬请期待）</button>
-    </div>
+        <button id="btnFindDifferentMixed" style="display:block;width:100%;margin:6px 0;padding:12px;background:#10b981;color:white;border:none;border-radius:8px;cursor:pointer;">🔍 混合版找不同</button>
+        <button id="btnCoastInland" style="display:block;width:100%;margin:6px 0;padding:12px;background:#06b6d4;color:white;border:none;border-radius:8px;cursor:pointer;">🌊 沿海或内陆</button>
+            </div>
     <button id="btnMiniGamesExit" style="display:block;width:100%;margin:10px 0;padding:10px;background:#ccc;color:black;border:none;border-radius:8px;cursor:pointer;">退出小游戏</button>
 </div>
 
@@ -148,6 +153,15 @@
         <label style="font-size:12px;color:#666;">限时（秒）：</label>
         <input type="number" id="battleDuration" value="60" min="10" style="width:80%;padding:8px;border:1px solid #ccc;border-radius:6px;">
     </div>
+
+    <div id="battleMaxPlayersDiv" style="margin-bottom:10px;display:none;">
+        <label style="font-size:12px;color:#666;">房间人数上限：</label>
+        <select id="battleMaxPlayers" style="width:80%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+            <option value="2">2 人</option>
+            <option value="3">3 人</option>
+            <option value="4" selected>4 人</option>
+        </select>
+    </div>
     
     <button id="btnBattleCreate" style="display:block;width:100%;margin:6px 0;padding:12px;background:#4a6cf7;color:white;border:none;border-radius:8px;cursor:pointer;">🏠 创建房间</button>
     <div style="text-align:center;margin:8px 0;color:#999;font-size:12px;">或</div>
@@ -157,9 +171,14 @@
     <button id="btnBattleExit" style="display:block;width:100%;margin:10px 0;padding:10px;background:#ccc;color:black;border:none;border-radius:8px;cursor:pointer;">退出</button>
 </div>
 
-<div id="quizPanel" style="display:none;position:fixed;top:10px;left:10px;z-index:9999;background:white;padding:16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.3);font-size:13px;width:340px;max-height:calc(100vh - 20px);overflow-y:auto;">
-        <h3 style="text-align:center;margin-bottom:10px;font-size:15px;">📝 出题模式</h3>
+<div id="quizPanel" style="display:none;position:fixed;top:10px;left:10px;right:10px;z-index:9999;background:white;padding:12px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.3);font-size:13px;width:auto;max-width:380px;max-height:calc(100vh - 20px);overflow-y:auto;">
+    <h3 style="text-align:center;margin-bottom:10px;font-size:15px;">
+        📝 出题模式
+        <button id="quizBackHomeBtn" type="button" style="font-size:11px;padding:3px 8px;margin-left:6px;border-radius:4px;border:none;background:#e5e7eb;color:black;cursor:pointer;vertical-align:middle;">🏠 主界面</button>
+        <button id="quizToggleBtn" type="button" style="font-size:11px;padding:3px 8px;margin-left:6px;border-radius:4px;border:none;background:#ccc;cursor:pointer;vertical-align:middle;">收起</button>
+    </h3>
 
+    <div id="quizPanelContent">
     <div style="display:flex;gap:6px;margin-bottom:8px;">
         <input type="text" id="quizQueryInput" placeholder="输入区县名..." autocomplete="off" style="flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:5px;font-size:13px;">
         <button id="quizQueryBtn" style="padding:6px 12px;border:none;border-radius:5px;background:#4a6cf7;color:white;cursor:pointer;font-size:13px;">查询</button>
@@ -252,15 +271,15 @@
         <button id="quizSaveBtn" style="flex:1;padding:8px;border:none;border-radius:6px;background:#10b981;color:white;cursor:pointer;font-size:13px;">💾 保存图片</button>
         <button id="quizClearBtn" style="flex:1;padding:8px;border:none;border-radius:6px;background:#ef4444;color:white;cursor:pointer;font-size:13px;">🗑️ 清空</button>
     </div>
-    <div style="display:flex;gap:6px;margin-top:8px;">
-        <button id="quizExitBtn" style="flex:1;padding:8px;border:none;border-radius:6px;background:#ccc;color:#333;cursor:pointer;font-size:13px;">退出出题模式</button>
     </div>
 </div>
 
 <div id="battleRoomPanel" style="display:none;">
     <h3>⚔️ 对战房间 <button id="battleCollapseBtn" style="font-size:11px;padding:2px 6px;margin-left:5px;background:#ccc;border:none;border-radius:4px;cursor:pointer;">收起</button></h3>
     <div id="battleRoomInfo"></div>
-    <div id="battleQuestion"></div>
+    <button id="battleCopyRoomBtn" type="button" style="display:block;width:100%;margin:6px 0;padding:8px;background:#8b5cf6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;">📋 复制房间号</button>
+    <button id="battleStartBtn" type="button" style="display:none;width:100%;margin:6px 0;padding:12px;background:#10b981;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:bold;">▶️ 开始游戏</button>
+        <div id="battleQuestion"></div>
     <input type="text" id="battleInput" placeholder="输入答案..." autocomplete="off" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:6px;margin:10px 0;">
     <button id="battleSubmitBtn" style="display:block;width:100%;padding:12px;background:#4a6cf7;color:white;border:none;border-radius:8px;cursor:pointer;">提交</button>
     <button id="battleGiveUpBtn" style="display:block;width:100%;margin:6px 0;padding:10px;background:#f59e0b;color:white;border:none;border-radius:8px;cursor:pointer;">🏳️ 放弃</button>
@@ -289,6 +308,20 @@
     <button onclick="document.getElementById('helpPopup').style.display='none'" style="margin-top:10px;">知道了</button>
 </div>
 
+<div id="avatarPopup" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999999;max-width:420px;width:92vw;">
+    <b style="display:block;text-align:center;margin-bottom:16px;font-size:16px;">选择头像版图</b>
+    <div id="avatarPreview" style="width:120px;height:120px;margin:0 auto 16px;border:2px solid #eee;border-radius:50%;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#dfe9f5;">
+        <span style="color:#999;font-size:13px;">暂无</span>
+    </div>
+    <input type="text" id="avatarSearchInput" placeholder="输入省/市/区县名，如：江苏省、大连市、东城区" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:14px;box-sizing:border-box;">
+    <div id="avatarSearchMsg" style="text-align:center;font-size:12px;color:#999;margin-top:8px;min-height:16px;"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+        <button id="avatarSetBtn" style="flex:1;padding:10px;border:none;border-radius:8px;background:#4a6cf7;color:white;cursor:pointer;font-size:14px;">设为头像</button>
+        <button id="avatarClearBtn" style="flex:1;padding:10px;border:none;border-radius:8px;background:#ef4444;color:white;cursor:pointer;font-size:14px;">清除</button>
+    </div>
+    <button id="avatarCloseBtn" style="display:block;width:100%;margin-top:8px;padding:10px;border:none;border-radius:8px;background:#ccc;cursor:pointer;font-size:14px;">关闭</button>
+</div>
+
 <div id="map"></div>
 <div id="watermark">Alphard_改革则吉ver</div>
 
@@ -315,6 +348,7 @@
 
     <!-- 3. 加载数据和游戏逻辑 -->
     <script src="js/data.js"></script>
+    <script src="js/district-info.js"></script>
     <script src="js/game.js"></script>
     <script src="js/ui.js"></script>
 
@@ -340,6 +374,7 @@
         bindUI();
         initSpeedSetting();
         updateBestScoreDisplay();
+        applyAvatar();
         
         // 先初始化地图
         initMap();
