@@ -5050,8 +5050,8 @@ function showBattleHistory() {
     
     const panel = document.createElement('div');
     panel.id = 'battleHistoryPanel';
-    panel.style.cssText = 'position:fixed !important;top:50% !important;left:50% !important;transform:translate(-50%,-50%) !important;background:white;padding:25px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999 !important;max-width:80vw;max-height:70vh;overflow-y:auto;min-width:300px;opacity:0;transition:opacity 0.3s ease;';
-    
+    panel.style.cssText = 'position:fixed !important;top:50% !important;left:50% !important;transform:translate(-50%,-50%) !important;background:white;padding:25px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999 !important;max-width:92vw;max-height:80vh;overflow-y:auto;min-width:0;width:92vw;opacity:0;transition:opacity 0.3s ease;';
+        
     let html = '<h3 style="text-align:center;margin-bottom:15px;">📜 战斗记录</h3>';
     
     if (records.length === 0) {
@@ -5243,7 +5243,7 @@ function showBattleReplay(roomId) {
     document.body.appendChild(overlay);
 
     const panel = document.createElement('div');
-    panel.style.cssText = 'position:fixed !important;top:50% !important;left:50% !important;transform:translate(-50%,-50%) !important;background:white;padding:20px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999 !important;max-width:95vw;max-height:80vh;overflow-y:auto;min-width:600px;';
+    panel.style.cssText = 'position:fixed !important;top:50% !important;left:50% !important;transform:translate(-50%,-50%) !important;background:white;padding:20px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999 !important;max-width:95vw;max-height:80vh;overflow-y:auto;min-width:0;width:95vw;';
 
     const modeText = record.mode === 'race'
         ? `🏁 竞速 · 目标 ${record.targetScore} 分`
@@ -5324,19 +5324,19 @@ function showBattleReplay(roomId) {
 
             html += '<div style="font-size:13px;line-height:1.9;color:#333;">';
             // 表头
-            html += '<div style="display:flex;gap:6px;font-weight:bold;color:#4a6cf7;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:4px;">'
-                + '<span style="flex:0 0 50%;">题目</span>';
+            html += '<div style="display:flex;gap:4px;font-weight:bold;color:#4a6cf7;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:4px;font-size:12px;">'
+                + '<span style="flex:0 0 45%;">题目</span>';
             cols.forEach(function (n) {
-                html += '<span style="flex:1;text-align:center;">' + nameMap[n] + '</span>';
+                html += '<span style="flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nameMap[n] + '</span>';
             });
             html += '</div>';
 
             seqList.forEach(function (item) {
-                html += '<div style="display:flex;gap:6px;align-items:center;">'
-                    + '<span style="flex:0 0 50%;text-align:left;word-break:break-all;">' + item.seq + '.' + item.question + '</span>';
+                html += '<div style="display:flex;gap:4px;align-items:center;font-size:12px;">'
+                    + '<span style="flex:0 0 45%;text-align:left;word-break:break-all;">' + item.seq + '.' + item.question + '</span>';
                 cols.forEach(function (n) {
                     var cell = item.cells[n] !== undefined ? item.cells[n] : fallback;
-                    html += '<span style="flex:1;text-align:center;">' + cell + '</span>';
+                    html += '<span style="flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + cell + '</span>';
                 });
                 html += '</div>';
             });
@@ -5375,19 +5375,19 @@ function showBattleReplay(roomId) {
 
         html += `<div style="font-size:14px;line-height:2;color:#333;">`;
         // 顶部表头：左玩家名 / 空 / 右玩家名
-        html += `<div style="display:flex;align-items:center;gap:8px;font-weight:bold;color:#4a6cf7;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:4px;">`
-            + `<span style="flex:0 0 60px;text-align:left;">${record.player1 || 'A'}</span>`
+        html += `<div style="display:flex;align-items:center;gap:4px;font-weight:bold;color:#4a6cf7;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:4px;font-size:12px;">`
+            + `<span style="flex:0 0 40px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${record.player1 || 'A'}</span>`
             + `<span style="flex:1;text-align:center;color:#999;font-weight:normal;">题目</span>`
-            + `<span style="flex:0 0 60px;text-align:right;">${record.player2 || 'B'}</span>`
+            + `<span style="flex:0 0 40px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${record.player2 || 'B'}</span>`
             + `</div>`;
         seqList.forEach(function (item) {
             var fallback = endedByTimeout ? '时间到' : '跳过';
             var left = item.a !== null ? item.a : fallback;
             var right = item.b !== null ? item.b : fallback;
-            html += `<div style="display:flex;align-items:center;gap:8px;">`
-                + `<span style="flex:0 0 60px;text-align:left;white-space:nowrap;">${left}</span>`
+            html += `<div style="display:flex;align-items:center;gap:4px;font-size:12px;">`
+                + `<span style="flex:0 0 40px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${left}</span>`
                 + `<span style="flex:1;text-align:center;word-break:break-all;">${item.seq}.${item.question}</span>`
-                + `<span style="flex:0 0 60px;text-align:right;white-space:nowrap;">${right}</span>`
+                + `<span style="flex:0 0 40px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${right}</span>`
                 + `</div>`;
         });
         html += `</div>`;
