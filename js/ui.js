@@ -435,6 +435,7 @@ document.getElementById('dailyInput').addEventListener('keydown', e => {
     document.getElementById('btnFindDifferent').addEventListener('click', startFindDifferent);
     document.getElementById('btnFindDifferentMixed').addEventListener('click', startFindDifferentMixed);
     document.getElementById('btnCoastInland').addEventListener('click', startCoastInland);
+    document.getElementById('btnGovSeat').addEventListener('click', openGovSeatPanel);
 
     // 省份下拉框初始化
     const sel = document.getElementById('provinceSelect');
@@ -1955,6 +1956,22 @@ let findDifferentMode = false;
 let findDifferentAnswer = null;
 let findDifferentLevel = 'district';
 
+// ==================== 找政府驻地 ====================
+let govSeatMode = false;
+let govSeatCity = null;          // 当前题目：地级行政区名，如"唐山市"
+let govSeatSeats = null;         // GOV_SEATS[govSeatCity]
+let govSeatStage = 1;            // 1=选市政府, 2=选省政府
+let govSeatAnswer = null;        // 当前阶段的正确答案（规范名）
+let govSeatCombo = 0;
+let govSeatScore = 0;
+let govSeatLocked = false;       // 判定后锁定，防连点
+let govSeatPolygons = [];        // 电脑端：每块 {name, polygons}
+let govSeatBoundaries = [];      // 手机端：每块 {name, boundaries}
+let govSeatCanvas = null;        // 手机端 canvas
+let govSeatLoadSeq = 0;
+let govSeatCityCache = {};     // 市名 → { adcode, subs: [...] }
+let govSeatDistrictCache = {}; // adcode → boundaries
+
 var avatarSearchLock = false;
 
 function searchAvatarDistrict() {
@@ -2057,6 +2074,18 @@ function openMiniGames() {
     playSound('click');
     if (typeof quizCleanup === 'function') quizCleanup();
     dailyMode = false;
+
+    // 清掉找政府驻地残留
+    govSeatMode = false;
+    govSeatLoadSeq++;
+    (function () {
+        var gp = document.getElementById('govSeatFloatPanel');
+        if (gp) gp.remove();
+        var gc = document.getElementById('govSeatCanvas');
+        if (gc) gc.remove();
+        var gh = document.getElementById('govSeatHUD');
+        if (gh) gh.remove();
+    })();
     if (timerMode) {
         toggleTimer();
     }
@@ -2078,13 +2107,789 @@ function openMiniGames() {
     miniPanel.classList.add('pop-in');
 }
 
+// ==================== 找政府驻地：入口 ====================
+
+function openGovSeatPanel() {
+    playSound('click');
+    if (typeof quizCleanup === 'function') quizCleanup();
+    dailyMode = false;
+    findDifferentMode = false;
+    if (timerMode) {
+        timerMode = false;
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        document.getElementById('btnTimer').classList.remove('active');
+        document.getElementById('timerDisplay').style.display = 'none';
+    }
+    document.getElementById('panel').style.display = 'none';
+    document.getElementById('dailyPanel').style.display = 'none';
+
+    var rb = document.getElementById('reloadBtn');
+    if (rb) { rb.style.visibility = 'hidden'; rb.style.opacity = '0'; }
+
+    var miniPanel = document.getElementById('miniGamesPanel');
+    if (miniPanel) {
+        miniPanel.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        miniPanel.style.opacity = '0';
+        miniPanel.style.transform = 'translate(-50%, -50%) scale(0.85)';
+        setTimeout(function () {
+            miniPanel.style.display = 'none';
+            miniPanel.style.opacity = '';
+            miniPanel.style.transform = '';
+            miniPanel.style.transition = '';
+        }, 300);
+    }
+
+    // 等小游戏面板淡出后再开局
+    setTimeout(function () {
+        startGovSeat();
+    }, 320);
+}
+
+function startGovSeat() {
+    govSeatMode = true;
+    govSeatCombo = 0;
+    govSeatScore = 0;
+    govSeatLocked = false;
+
+    // 隐藏主面板、禁用主游戏输入
+    document.getElementById('panel').style.display = 'none';
+    document.getElementById('input').disabled = true;
+    document.getElementById('submitBtn').disabled = true;
+    document.getElementById('newBtn').disabled = true;
+    document.getElementById('hint').style.pointerEvents = 'none';
+
+    generateGovSeatQuestion();
+}
+
+// ==================== 找政府驻地：出题 ====================
+
+function generateGovSeatQuestion() {
+    if (!govSeatMode) return;
+    govSeatLocked = true;   // 抽题/加载期间锁死，加载完在 finishIfDone 里解锁
+    govSeatStage = 1;
+
+    // 从 GOV_SEATS 随机抽一个（排除和上一题重复）
+    var keys = Object.keys(GOV_SEATS);
+    var pick = null;
+    for (var i = 0; i < 30; i++) {
+        pick = keys[Math.floor(Math.random() * keys.length)];
+        if (pick !== govSeatCity) break;
+    }
+    govSeatCity = pick;
+    govSeatSeats = GOV_SEATS[pick];
+
+    // 加载该市 + 下辖区县边界
+    loadGovSeatMap(govSeatCity, function (err, districts) {
+        if (!govSeatMode) return;
+        if (err || !districts || districts.length === 0) {
+            // 加载失败，换一题
+            setTimeout(generateGovSeatQuestion, 300);
+            return;
+        }
+        // 已经在 appendGovSeatDistrict 里边加载边画了，这里不用再渲染
+    });
+}
+
+// 把高德返回的纯区县名转成 data.js 规范名
+// 重名区（ADJACENCY 里有 "xx（市名）"）用带括号名；否则用原名
+function normalizeGovSeatName(name, cityName) {
+    if (typeof ADJACENCY === 'undefined') return name;
+
+    // 1. 如果这个市本身就带"市"字结尾，拼括号要处理
+    //    例：cityName="福州市" → "鼓楼区（福州市）"
+    var withParen = name + '（' + cityName + '）';
+    if (ADJACENCY[withParen]) return withParen;
+
+    // 2. 有些市名在 GOV_SEATS 里是简称（如"大兴安岭地区"），试原名
+    if (ADJACENCY[name]) return name;
+
+    // 3. 都找不到，用原名
+    return name;
+}
+
+// 加载某市下辖所有区县的边界（照抄经典模式 loadNeighborDistricts 的结构）
+function loadGovSeatMap(cityName, callback) {
+    var mySeq = ++govSeatLoadSeq;
+
+    function done(err, list) {
+        if (mySeq !== govSeatLoadSeq) return;
+        govSeatLocked = false;   // 无论哪条路，最终都解锁
+        callback(err, list);
+    }
+
+    if (!ds || !dsCity) {
+        setTimeout(function () {
+            if (mySeq !== govSeatLoadSeq) return;
+            loadGovSeatMap(cityName, callback);
+        }, 400);
+        return;
+    }
+
+    // 直辖市特殊处理：高德下钻拿不到区，改用 DISTRICT_INFO 列表逐个搜
+    var directCities = ['北京市', '天津市', '上海市', '重庆市'];
+    if (directCities.indexOf(cityName) !== -1) {
+        loadGovSeatDirectCity(cityName, done);
+        return;
+    }
+
+    // 缓存命中：直接用
+    if (govSeatCityCache[cityName]) {
+        var cached = govSeatCityCache[cityName];
+        renderGovSeatFromCache(cached);
+        done(null, cached.districts);
+        return;
+    }
+
+    // 1. 搜该市拿 adcode
+    ds.search(cityName, function (status, result) {
+        if (mySeq !== govSeatLoadSeq) return;
+        if (status !== 'complete' || !result.districtList || result.districtList.length === 0) {
+            done('city search failed', null);
+            return;
+        }
+        var cityAdcode = result.districtList[0].adcode;
+
+        // 2. 按 adcode 搜，拿子级列表
+        ds.search(cityAdcode, function (s2, r2) {
+            if (mySeq !== govSeatLoadSeq) return;
+            if (s2 !== 'complete' || !r2.districtList || r2.districtList.length === 0) {
+                done('city adcode search failed', null);
+                return;
+            }
+            var cityFull = r2.districtList[0];
+            var subs = (cityFull.districtList || []).filter(function (d) {
+                return d.level === 'district' && d.adcode;
+            });
+
+            // 无下辖：用自己的边界
+            if (subs.length === 0) {
+                if (cityFull.boundaries && cityFull.boundaries.length > 0) {
+                    done(null, [{ name: cityName, adcode: cityAdcode, boundaries: cityFull.boundaries }]);
+                } else {
+                    done('no boundaries', null);
+                }
+                return;
+            }
+
+            // 3. 逐个加载，每加载一个就画一块（边加载边画）
+            var out = [];
+            var finishedCount = 0;
+            var total = subs.length;
+
+            // 加载期间锁定点击
+            govSeatLocked = true;
+
+            // 准备渲染容器
+            prepareGovSeatRender();
+
+            function finishIfDone() {
+                finishedCount++;
+                if (finishedCount >= total) {
+                    govSeatLocked = false;
+                    finalizeGovSeatRender();
+                    govSeatCityCache[cityName] = { subs: subs, districts: out.slice() };
+                    done(null, out);
+                }
+            }
+
+            function loadOne(d, retry) {
+                var thisDone = false;
+
+                var timeout = setTimeout(function () {
+                    if (thisDone) return;
+                    thisDone = true;
+                    if (retry > 0) {
+                        loadOne(d, retry - 1);
+                    } else {
+                        finishIfDone();
+                    }
+                }, 1000);
+
+                // 区县边界缓存命中
+                if (govSeatDistrictCache[d.adcode]) {
+                    clearTimeout(timeout);
+                    var cachedB = govSeatDistrictCache[d.adcode];
+                    if (cachedB && cachedB.boundaries && cachedB.boundaries.length > 0) {
+                        var itemC = { name: normalizeGovSeatName(d.name, govSeatCity), adcode: d.adcode, boundaries: cachedB.boundaries };
+                        out.push(itemC);
+                        appendGovSeatDistrict(itemC);
+                    }
+                    thisDone = true;
+                    finishIfDone();
+                    return;
+                }
+
+                ds.search(d.adcode, function (s3, r3) {
+                    if (thisDone) return;
+                    thisDone = true;
+                    clearTimeout(timeout);
+                    if (mySeq !== govSeatLoadSeq) return;
+
+                    if (s3 === 'complete' && r3.districtList && r3.districtList.length > 0) {
+                        var nd0 = r3.districtList.find(function (x) { return x.level === 'district'; }) || r3.districtList[0];
+                        if (nd0 && nd0.boundaries && nd0.boundaries.length > 0) {
+                            govSeatDistrictCache[d.adcode] = { boundaries: nd0.boundaries };
+                        }
+                        var nd = r3.districtList.find(function (x) { return x.level === 'district'; }) || r3.districtList[0];
+                        if (nd && nd.boundaries && nd.boundaries.length > 0) {
+                            // 把高德纯名转成 data.js 规范名（重名区加括号）
+                            var normName = normalizeGovSeatName(d.name, govSeatCity);
+                            var item = { name: normName, adcode: d.adcode, boundaries: nd.boundaries };
+                            out.push(item);
+                            appendGovSeatDistrict(item);
+                        }
+                    }
+                    finishIfDone();
+                });
+            }
+
+            subs.forEach(function (d) {
+                loadOne(d, 5);
+            });
+        });
+    });
+}
+
+// 直辖市：本地 adcode 列表，逐个搜边界（并发 + 重试 5 次，同经典）
+function loadGovSeatDirectCity(cityName, done) {
+    var mySeq = govSeatLoadSeq;
+    function checkSeq() { return mySeq === govSeatLoadSeq; }
+
+    var list = DIRECT_CITY_ADCODES[cityName];
+    if (!list || list.length === 0) {
+        done('no list', null);
+        return;
+    }
+
+    govSeatLocked = true;
+    prepareGovSeatRender();
+
+    var out = [];
+    var finishedCount = 0;
+    var total = list.length;
+
+    function finishOne() {
+        finishedCount++;
+        if (finishedCount >= total) {
+            finalizeGovSeatRender();
+            done(null, out);
+        }
+    }
+
+    function loadOne(item, retry) {
+        var normName = item[0];
+        var adcode = item[1];
+        var thisDone = false;
+
+        var timeout = setTimeout(function () {
+            if (thisDone) return;
+            thisDone = true;
+            if (retry > 0) {
+                setTimeout(function () { loadOne(item, retry - 1); }, 400);
+            } else {
+                finishOne();
+            }
+        }, 1000);
+
+        ds.search(adcode, function (s, r) {
+            if (thisDone) return;
+            thisDone = true;
+            clearTimeout(timeout);
+            if (!checkSeq()) return;
+
+            if (s === 'complete' && r.districtList && r.districtList.length > 0) {
+                var d = r.districtList.find(function (x) { return x.level === 'district'; }) || r.districtList[0];
+                if (d && d.boundaries && d.boundaries.length > 0) {
+                    var it = { name: normName, adcode: adcode, boundaries: d.boundaries };
+                    out.push(it);
+                    appendGovSeatDistrict(it);
+                    finishOne();
+                    return;
+                }
+            }
+            if (retry > 0) loadOne(item, retry - 1);
+            else finishOne();
+        });
+    }
+
+    list.forEach(function (item) { loadOne(item, 15); });
+}
+
+// 从缓存直接渲染一个市（不进网络）
+function renderGovSeatFromCache(cached) {
+    prepareGovSeatRender();
+    var all = [];
+    (cached.subs || []).forEach(function (s) { all.push(s); });
+    (cached.districts || []).forEach(function (d) {
+        appendGovSeatDistrict(d);
+    });
+    finalizeGovSeatRender();
+    govSeatLocked = false;   // 缓存路径：画完就解锁
+}
+
+// 开始渲染前的准备：清掉上一题
+function prepareGovSeatRender() {
+    _govSeatLastDistricts = [];
+    govSeatPolygons.forEach(function (item) {
+        item.polygons.forEach(function (p) { try { p.setMap(null); } catch (e) {} });
+        if (item.label) { try { item.label.setMap(null); } catch (e) {} }
+    });
+    govSeatPolygons = [];
+
+    if (window.innerWidth <= 768) {
+        govSeatBoundaries = [];
+        var gc = document.getElementById('govSeatCanvas');
+        if (gc) gc.remove();
+    } else {
+        if (typeof clearMap === 'function') clearMap();
+    }
+
+    // 切到该题的答案 + 显示 HUD
+    var target = (govSeatStage === 1) ? govSeatSeats.citySeat : govSeatSeats.provinceSeat;
+    govSeatAnswer = target;
+    document.getElementById('map').classList.add('visible');
+    updateGovSeatHUD();
+    setGovSeatHint('⏳ 地图加载中...');
+
+    // 清「下一题」按钮
+    var nb = document.getElementById('govSeatNextBtn');
+    if (nb) nb.remove();
+}
+
+// 增量画一块（电脑端）
+function appendGovSeatDistrict(item) {
+    if (window.innerWidth <= 768) {
+        govSeatBoundaries.push({ name: item.name, boundaries: item.boundaries });
+        drawGovSeatCanvas();
+        return;
+    }
+    if (typeof map === 'undefined' || !map) return;
+
+    var polys = item.boundaries.map(function (b) {
+        return new AMap.Polygon({
+            map: map,
+            path: b,
+            strokeColor: '#4a6cf7',
+            strokeWeight: 2,
+            fillColor: '#4a6cf7',
+            fillOpacity: 0.15
+        });
+    });
+    polys.forEach(function (p) {
+        p.on('click', function () { checkGovSeatAnswer(item.name); });
+    });
+
+    govSeatPolygons.push({ name: item.name, polygons: polys, label: null });
+
+    // 视野自适应：把已画的都框进来
+    var allPolys = [];
+    govSeatPolygons.forEach(function (g) { allPolys = allPolys.concat(g.polygons); });
+    if (allPolys.length > 0) {
+        map.setFitView(allPolys, null, [60, 60, 60, 60]);
+    }
+}
+
+// 全部加载完
+function finalizeGovSeatRender() {
+    if (window.innerWidth <= 768) {
+        drawGovSeatCanvas();
+    } else {
+        var allPolys = [];
+        govSeatPolygons.forEach(function (g) { allPolys = allPolys.concat(g.polygons); });
+        if (allPolys.length > 0) {
+            map.setFitView(allPolys, null, [60, 60, 60, 60]);
+        }
+    }
+    // 加载完成，恢复正常提示
+    _govSeatHintText = '';
+    setGovSeatHint((govSeatStage === 1) ? '请选出市政府驻地' : '请选出省政府驻地');
+}
+
+// ==================== 找政府驻地：渲染 ====================
+
+function renderGovSeat(districts) {
+    // districts: [{name, adcode, boundaries}]
+    _govSeatLastDistricts = districts;
+    var target = (govSeatStage === 1) ? govSeatSeats.citySeat : govSeatSeats.provinceSeat;
+    govSeatAnswer = target;
+    // 注意：不要在这里清 govSeatPolygons，交给 renderGovSeatPC 清
+    // （否则上一题的 polygon 引用会丢，导致清不掉）
+
+    // 清掉上一题的「下一题」按钮
+    var nb = document.getElementById('govSeatNextBtn');
+    if (nb) nb.remove();
+
+    // 地图可见
+    document.getElementById('map').classList.add('visible');
+
+    if (window.innerWidth <= 768) {
+        renderGovSeatMobile(districts);
+    } else {
+        renderGovSeatPC(districts);
+    }
+
+    // 更新顶部 HUD 提示
+    updateGovSeatHUD();
+}
+
+// 电脑端：用 AMap.Polygon
+function renderGovSeatPC(districts) {
+    if (typeof clearMap === 'function') clearMap();
+
+    // 清掉上一题的政府驻地多边形
+    govSeatPolygons.forEach(function (item) {
+        item.polygons.forEach(function (p) {
+            try { p.setMap(null); } catch (e) {}
+        });
+    });
+    govSeatPolygons = [];
+
+    var allPolygons = [];
+    districts.forEach(function (d) {
+        var polys = d.boundaries.map(function (b) {
+            return new AMap.Polygon({
+                map: map,
+                path: b,
+                strokeColor: '#4a6cf7',
+                strokeWeight: 2,
+                fillColor: '#4a6cf7',
+                fillOpacity: 0.15
+            });
+        });
+        govSeatPolygons.push({ name: d.name, polygons: polys });
+
+        polys.forEach(function (p) {
+            p.on('click', function () {
+                checkGovSeatAnswer(d.name, p);
+            });
+        });
+        allPolygons = allPolygons.concat(polys);
+    });
+
+    if (allPolygons.length > 0) {
+        map.setFitView(allPolygons, null, [40, 40, 40, 40]);
+    }
+}
+
+// 手机端：用 canvas 绘制 + 点击命中
+function renderGovSeatMobile(districts) {
+    govSeatBoundaries = districts.map(function (d) {
+        return { name: d.name, boundaries: d.boundaries };
+    });
+    drawGovSeatCanvas();
+}
+
+function drawGovSeatCanvas(highlightName, highlightType) {
+    var old = document.getElementById('govSeatCanvas');
+    if (old) old.remove();
+    if (govSeatBoundaries.length === 0) return;
+
+    var canvas = document.createElement('canvas');
+    canvas.id = 'govSeatCanvas';
+    canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9998;background:#dfe9f5;';
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    document.body.appendChild(canvas);
+    govSeatCanvas = canvas;
+
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#dfe9f5';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 计算全局范围
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    govSeatBoundaries.forEach(function (d) {
+        d.boundaries.forEach(function (b) {
+            b.forEach(function (p) {
+                var lng = p.lng !== undefined ? p.lng : p[0];
+                var lat = p.lat !== undefined ? p.lat : p[1];
+                minX = Math.min(minX, lng); maxX = Math.max(maxX, lng);
+                minY = Math.min(minY, lat); maxY = Math.max(maxY, lat);
+            });
+        });
+    });
+    if (!isFinite(minX)) return;
+
+    // 留出顶部 HUD 空间
+    var padTop = 130, padOther = 30;
+    var centerLat = (minY + maxY) / 2;
+    var cosLat = Math.cos(centerLat * Math.PI / 180);
+    if (cosLat < 0.01) cosLat = 0.01;
+    var rangeX = (maxX - minX) * cosLat;
+    var rangeY = maxY - minY;
+    var availW = canvas.width - padOther * 2;
+    var availH = canvas.height - padTop - padOther;
+    var scale = Math.min(availW / rangeX, availH / rangeY);
+    var ox = (canvas.width - rangeX * scale) / 2;
+    var oy = padTop + (availH - rangeY * scale) / 2;
+
+    function toXY(lng, lat) {
+        return [ox + (lng - minX) * cosLat * scale, canvas.height - oy - (lat - minY) * scale];
+    }
+
+    // 绘制
+    govSeatBoundaries.forEach(function (d) {
+        var isHi = (d.name === highlightName);
+        var stroke = '#4a6cf7', fill = 'rgba(74,108,247,0.15)', lw = 2;
+        if (isHi && highlightType === 'correct') { stroke = '#10b981'; fill = 'rgba(16,185,129,0.4)'; lw = 3; }
+        else if (isHi && highlightType === 'wrong') { stroke = '#ef4444'; fill = 'rgba(239,68,68,0.4)'; lw = 3; }
+
+        d.boundaries.forEach(function (b) {
+            ctx.beginPath();
+            b.forEach(function (p, i) {
+                var lng = p.lng !== undefined ? p.lng : p[0];
+                var lat = p.lat !== undefined ? p.lat : p[1];
+                var pt = toXY(lng, lat);
+                if (i === 0) ctx.moveTo(pt[0], pt[1]);
+                else ctx.lineTo(pt[0], pt[1]);
+            });
+            ctx.closePath();
+            ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke();
+            ctx.fillStyle = fill; ctx.fill();
+        });
+    });
+
+    // 记录坐标转换供命中用
+    canvas._toXY = toXY;
+    canvas._minX = minX; canvas._minY = minY;
+    canvas._cosLat = cosLat; canvas._scale = scale;
+    canvas._ox = ox; canvas._oy = oy;
+
+    // 点击命中
+    canvas.onclick = function (e) {
+        if (!govSeatMode || govSeatLocked) return;
+        var rect = canvas.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var y = e.clientY - rect.top;
+        var hit = hitGovSeat(x, y);
+        if (hit) checkGovSeatAnswer(hit);
+    };
+}
+
+// 判断点 (x,y) 落在哪个区县内
+function hitGovSeat(x, y) {
+    for (var i = 0; i < govSeatBoundaries.length; i++) {
+        var d = govSeatBoundaries[i];
+        for (var j = 0; j < d.boundaries.length; j++) {
+            var b = d.boundaries[j];
+            var inside = false;
+            for (var k = 0, l = b.length - 1; k < b.length; l = k++) {
+                var lng1 = b[k].lng !== undefined ? b[k].lng : b[k][0];
+                var lat1 = b[k].lat !== undefined ? b[k].lat : b[k][1];
+                var lng2 = b[l].lng !== undefined ? b[l].lng : b[l][0];
+                var lat2 = b[l].lat !== undefined ? b[l].lat : b[l][1];
+                var p1 = govSeatCanvas._toXY(lng1, lat1);
+                var p2 = govSeatCanvas._toXY(lng2, lat2);
+                var xi = p1[0], yi = p1[1], xj = p2[0], yj = p2[1];
+                var intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            if (inside) return d.name;
+        }
+    }
+    return null;
+}
+
+function updateGovSeatHUD() {
+    var hud = document.getElementById('govSeatHUD');
+    if (!hud) {
+        hud = document.createElement('div');
+        hud.id = 'govSeatHUD';
+        hud.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:99999;background:rgba(255,255,255,0.95);padding:10px 18px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.2);text-align:center;font-size:14px;min-width:260px;';
+        document.body.appendChild(hud);
+    }
+
+    var stageText = _govSeatHintText || ((govSeatStage === 1) ? '请选出市政府驻地' : '请选出省政府驻地');
+    hud.innerHTML =
+        '<div style="font-weight:bold;color:#4a6cf7;margin-bottom:4px;">🏛️ ' + govSeatCity + '</div>' +
+        '<div id="govSeatHint" style="color:#333;margin-bottom:6px;">' + stageText + '</div>' +
+        '<div style="font-size:12px;color:#666;">🔥 连击: <b style="color:#ef4444;">' + govSeatCombo + '</b>' +
+        ' &nbsp; ⭐ 得分: <b style="color:#4a6cf7;">' + govSeatScore + '</b>' +
+        ' &nbsp; 🏆 最高: <b style="color:#f59e0b;">' + getGovSeatBest() + '</b></div>' +
+        '<button id="govSeatExitBtn" style="margin-top:8px;padding:6px 14px;border:none;border-radius:6px;background:#ccc;cursor:pointer;font-size:12px;">退出小游戏</button>';
+
+    var exitBtn = document.getElementById('govSeatExitBtn');
+    if (exitBtn) {
+        exitBtn.onclick = function () {
+            playSound('click');
+            var hud2 = document.getElementById('govSeatHUD');
+            if (hud2) hud2.remove();
+            govSeatMode = false;
+            govSeatLoadSeq++;
+            var gc = document.getElementById('govSeatCanvas');
+            if (gc) gc.remove();
+            govSeatPolygons.forEach(function (item) {
+                item.polygons.forEach(function (p) {
+                    try { p.setMap(null); } catch (e) {}
+                });
+            });
+            govSeatPolygons = [];
+            govSeatBoundaries = [];
+            if (typeof clearMap === 'function') clearMap();
+            closeMiniGames();
+        };
+    }
+}
+
+var _govSeatHintText = '';
+
+function setGovSeatHint(text) {
+    _govSeatHintText = text;
+    var el = document.getElementById('govSeatHint');
+    if (el) el.textContent = text;
+}
+
+function getGovSeatBest() {
+    return Number(localStorage.getItem('govSeatBest') || '0');
+}
+
+// ==================== 找政府驻地：判定 ====================
+
+function checkGovSeatAnswer(name) {
+    if (!govSeatMode || govSeatLocked) return;
+    govSeatLocked = true;
+
+    var correct = (name === govSeatAnswer);
+
+    if (correct) {
+        playSound('correct');
+        govSeatCombo++;
+        govSeatScore += govSeatCombo;
+        if (govSeatScore > getGovSeatBest()) {
+            localStorage.setItem('govSeatBest', String(govSeatScore));
+        }
+        highlightGovSeat(name, 'correct');
+
+        // 延迟切换：市政府→省政府，或结束本题→下一题
+        setTimeout(function () {
+            if (!govSeatMode) return;
+            advanceGovSeat();
+        }, 600);
+    } else {
+        playSound('wrong');
+        govSeatCombo = 0;
+        highlightGovSeat(name, 'wrong');
+        highlightGovSeat(govSeatAnswer, 'correct');
+
+        // 显示“下一题”按钮
+        setTimeout(function () {
+            if (!govSeatMode) return;
+            showGovSeatNextBtn();
+        }, 500);
+    }
+}
+
+// 高亮某块区域（电脑端改 polygon 样式；手机端重绘）
+function highlightGovSeat(name, type) {
+    if (window.innerWidth <= 768) {
+        // 手机端：重绘时按状态上色
+        if (typeof drawGovSeatCanvas === 'function') {
+            drawGovSeatCanvas(name, type);
+        }
+        return;
+    }
+
+    govSeatPolygons.forEach(function (item) {
+        if (item.name === name) {
+            item.polygons.forEach(function (p) {
+                if (type === 'correct') {
+                    p.setOptions({ strokeColor: '#10b981', fillColor: '#10b981', fillOpacity: 0.4, strokeWeight: 3 });
+                } else {
+                    p.setOptions({ strokeColor: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.4, strokeWeight: 3 });
+                }
+            });
+        }
+    });
+}
+
+// 答对后推进：市政府→省政府，或本题结束→下一题
+function advanceGovSeat() {
+    govSeatLocked = true;   // 切换期间锁死
+    if (!govSeatSeats) { generateGovSeatQuestion(); return; }
+
+    // 有省政府驻地，且当前是第 1 题（市政府）
+    if (govSeatSeats.provinceSeat && govSeatStage === 1) {
+        govSeatStage = 2;
+        govSeatLocked = false;
+        govSeatAnswer = govSeatSeats.provinceSeat;
+        _govSeatHintText = '';   // 清掉缓存的提示文字
+        // 清掉上一阶段的高亮
+        govSeatPolygons.forEach(function (item) {
+            item.polygons.forEach(function (p) {
+                p.setOptions({ strokeColor: '#4a6cf7', fillColor: '#4a6cf7', fillOpacity: 0.15, strokeWeight: 2 });
+            });
+        });
+        updateGovSeatHUD();
+        return;
+    }
+
+    // 否则：本题结束，出下一题
+    generateGovSeatQuestion();
+}
+
+// 缓存当前题目的 districts，供切到省政府时重画
+var _govSeatLastDistricts = null;
+function govSeatStageDistricts() {
+    return _govSeatLastDistricts || [];
+}
+
+// 显示“下一题”按钮（答错时）
+function showGovSeatNextBtn() {
+    var hud = document.getElementById('govSeatHUD');
+    if (!hud) return;
+    var btn = document.getElementById('govSeatNextBtn');
+    if (btn) return;
+
+    btn = document.createElement('button');
+    btn.id = 'govSeatNextBtn';
+    btn.textContent = '下一题 →';
+    btn.style.cssText = 'display:block;width:100%;margin-top:8px;padding:10px;border:none;border-radius:8px;background:#4a6cf7;color:white;cursor:pointer;font-size:14px;';
+    btn.onclick = function () {
+        playSound('click');
+        btn.remove();
+        // 答错的是市政府题，仍继续省政府题（按你确认的 A）
+        advanceGovSeat();
+    };
+    hud.appendChild(btn);
+}
+
 function closeMiniGames() {
     playSound('click');
     findDifferentMode = false;
 
+    // 无条件清理政府驻地残留
+    govSeatMode = false;
+    govSeatLoadSeq++;
+    (function () {
+        var gp = document.getElementById('govSeatFloatPanel');
+        if (gp) gp.remove();
+        var gc = document.getElementById('govSeatCanvas');
+        if (gc) gc.remove();
+        var gh = document.getElementById('govSeatHUD');
+        if (gh) gh.remove();
+        govSeatPolygons = [];
+        govSeatBoundaries = [];
+    })();
+
     // 移除“找不同”浮动面板
     const floatPanel = document.getElementById('findDifferentFloatPanel');
     if (floatPanel) floatPanel.remove();
+
+    // 退出找政府驻地
+    if (govSeatMode) {
+        govSeatMode = false;
+        govSeatLocked = false;
+        govSeatLoadSeq++;
+        const gp = document.getElementById('govSeatFloatPanel');
+        if (gp) gp.remove();
+        const gc = document.getElementById('govSeatCanvas');
+        if (gc) gc.remove();
+        const gh = document.getElementById('govSeatHUD');
+        if (gh) gh.remove();
+        govSeatPolygons = [];
+        govSeatBoundaries = [];
+        if (typeof clearMap === 'function') clearMap();
+    }
     const mixedFloat = document.getElementById('mixedFloatPanel');
     if (mixedFloat) mixedFloat.remove();
     const mixedLoading = document.getElementById('mixedLoadingPanel');
@@ -2723,7 +3528,7 @@ function loadMixedMaps(items) {
         // 取上级地级名（区县重名时用于精确匹配）
         var parentCity = '';
         if (typeof DISTRICT_INFO !== 'undefined' && DISTRICT_INFO[item.name]) {
-            parentCity = DISTRICT_INFO[item.name].city || '';
+            parentCity = DISTRICT_INFO[item.name].city || DISTRICT_INFO[item.name].province || '';
         }
 
         function doSearch(retry) {
@@ -2735,20 +3540,29 @@ function loadMixedMaps(items) {
                         return x.boundaries && x.boundaries.length > 0;
                     });
 
-                    var d = null;
-                    if (parentCity && candidates.length > 1) {
-                        // 有上级，按 adcode 前 4 位匹配地级
-                        var parentCode = getCityCode(parentCity);
-                        if (parentCode) {
-                            d = candidates.find(function (x) {
-                                return x.adcode && x.adcode.substring(0, 4) === parentCode;
-                            });
-                        }
-                    }
-                    if (!d) {
-                        d = candidates.find(function (x) { return x.name === baseName; });
-                    }
-                    if (!d) d = candidates[0] || result.districtList[0];
+        var d = null;
+        if (parentCity && candidates.length > 1) {
+            var parentCode = getCityCode(parentCity);
+            if (parentCode) {
+                // 地级市：adcode 前 4 位匹配
+                d = candidates.find(function (x) {
+                    return x.adcode && x.adcode.substring(0, 4) === parentCode;
+                });
+            } else {
+                // 直辖市：adcode 前 2 位匹配
+                var provMap = { '北京市':'11','天津市':'12','上海市':'31','重庆市':'50' };
+                var provCode = provMap[parentCity];
+                if (provCode) {
+                    d = candidates.find(function (x) {
+                        return x.adcode && x.adcode.substring(0, 2) === provCode;
+                    });
+                }
+            }
+        }
+        if (!d) {
+            d = candidates.find(function (x) { return x.name === baseName; });
+        }
+        if (!d) d = candidates[0] || result.districtList[0];
 
                     if (d && d.boundaries && d.boundaries.length > 0) {
                         mapsData.push({ name: item.name, district: d, isTarget: item.isDiff });
@@ -3023,7 +3837,7 @@ function loadCoastMap(name, canvas, floatPanel) {
     var baseName = name.replace(/（.+?）$/, '');
     var parentCity = '';
     if (typeof DISTRICT_INFO !== 'undefined' && DISTRICT_INFO[name]) {
-        parentCity = DISTRICT_INFO[name].city || '';
+        parentCity = DISTRICT_INFO[name].city || DISTRICT_INFO[name].province || '';
     }
 
     // 判断搜索类型
@@ -3039,17 +3853,30 @@ function loadCoastMap(name, canvas, floatPanel) {
                     return x.boundaries && x.boundaries.length > 0;
                 });
 
-                var d = null;
-                if (parentCity && candidates.length > 1) {
-                    var parentCode = getCityCode(parentCity);
-                    if (parentCode) {
-                        d = candidates.find(function (x) {
-                            return x.adcode && x.adcode.substring(0, 4) === parentCode;
-                        });
-                    }
-                }
-                if (!d) d = candidates.find(function (x) { return x.name === baseName; });
-                if (!d) d = candidates[0] || result.districtList[0];
+    var d = null;
+    if (parentCity && candidates.length > 1) {
+        var parentCode = getCityCode(parentCity);
+        if (parentCode) {
+            // 地级市：adcode 前 4 位匹配
+            d = candidates.find(function (x) {
+                return x.adcode && x.adcode.substring(0, 4) === parentCode;
+            });
+        } else {
+            // 直辖市：adcode 前 2 位匹配
+            var provMap = { '北京市':'11','天津市':'12','上海市':'31','重庆市':'50' };
+            var provCode = provMap[parentCity];
+            if (provCode) {
+                d = candidates.find(function (x) {
+                    return x.adcode && x.adcode.substring(0, 2) === provCode;
+                });
+            }
+        }
+    }
+    // 兜底：严格同名匹配
+    if (!d) {
+        d = candidates.find(function (x) { return x.name === baseName; });
+    }
+    if (!d) d = candidates[0] || result.districtList[0];
 
                 if (d && d.boundaries && d.boundaries.length > 0) {
                     drawDistrictOnSmallCanvas(d, canvas);
