@@ -154,10 +154,51 @@ function hideDailyModePopup(callback) {
 
 function bindUI() {
 
-document.getElementById('homeBtnAvatar').addEventListener('click', openAvatarPopup);
-document.getElementById('homeAvatarDisplay').addEventListener('click', openAvatarPopup);
+document.getElementById('homeBtnAvatar').addEventListener('click', function () {
+    requirePlayerName(function () {
+        openAvatarPopup();
+    });
+});
+document.getElementById('homeAvatarDisplay').addEventListener('click', function () {
+    requirePlayerName(function () {
+        openAvatarPopup();
+    });
+});
 
 document.getElementById('avatarCloseBtn').addEventListener('click', closeAvatarPopup);
+
+document.getElementById('avatarNameSaveBtn').addEventListener('click', function () {
+    var name = document.getElementById('avatarNameInput').value.trim();
+    var msg = document.getElementById('avatarNameMsg');
+
+    // 在房间内禁止改名
+    if (typeof battleRoomId !== 'undefined' && battleRoomId) {
+        msg.style.color = '#ef4444';
+        msg.textContent = '对战房间内不能改名';
+        return;
+    }
+
+    var err = validatePlayerName(name);
+    if (err) { msg.style.color = '#ef4444'; msg.textContent = err; return; }
+
+    if (!canChangeNameToday()) {
+        msg.style.color = '#ef4444';
+        msg.textContent = '今天已经改过了，明天再来';
+        return;
+    }
+
+    if (name === getPlayerName()) {
+        msg.style.color = '#ef4444';
+        msg.textContent = '名字没变';
+        return;
+    }
+
+    savePlayerName(name, false);
+    updateHomePlayerName();
+    msg.style.color = '#10b981';
+    msg.textContent = '✅ 已保存';
+    playSound('click');
+});
 
 // 搜索头像
 document.getElementById('avatarSearchInput').addEventListener('keydown', function (e) {
@@ -190,12 +231,16 @@ document.getElementById('avatarClearBtn').addEventListener('click', function () 
 
 document.getElementById('homeBtnPlay').addEventListener('click', () => {
     playSound('click');
-    enterGameThenRun(null);
+    requirePlayerName(function () {
+        enterGameThenRun(null);
+    });
 });
 
 document.getElementById('homeBtnQuiz').addEventListener('click', () => {
     playSound('click');
-    enterGameThenRun(() => openQuizPanel());
+    requirePlayerName(function () {
+        enterGameThenRun(() => openQuizPanel());
+    });
 });
 
 document.getElementById('quizQueryBtn').addEventListener('click', quizDoQuery);
@@ -274,6 +319,7 @@ document.getElementById('quizFillOpacity').addEventListener('input', function() 
 
 document.getElementById('homeBtnDaily').addEventListener('click', () => {
     playSound('click');
+    requirePlayerName(function () {
 
     const home = document.getElementById('homeScreen');
 
@@ -300,6 +346,31 @@ document.getElementById('homeBtnDaily').addEventListener('click', () => {
         // 首页已完全消失，此时再显示弹窗并播放淡入
         showDailyModePopup();
     }, 550);
+
+    });
+});
+
+document.getElementById('dailyModeExtreme').addEventListener('click', () => {
+    playSound('click');
+    hideDailyModePopup(() => {
+        requirePlayerName(function () {
+            openExtremeChallenge();
+        });
+    });
+});
+
+document.getElementById('extremeReadyBtn').addEventListener('click', function () {
+    playSound('click');
+    startExtremeChallenge();
+});
+document.getElementById('extremeSubmitBtn').addEventListener('click', checkExtremeAnswer);
+document.getElementById('extremeInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') checkExtremeAnswer();
+});
+document.getElementById('extremeHistoryBtn').addEventListener('click', showExtremeHistory);
+document.getElementById('extremeExitBtn').addEventListener('click', function () {
+    playSound('click');
+    exitExtremeChallenge();
 });
 
 document.getElementById('dailyModeDistrict').addEventListener('click', () => {
@@ -326,6 +397,7 @@ document.getElementById('dailyModeCancel').addEventListener('click', () => {
 
 document.getElementById('homeBtnMiniGames').addEventListener('click', () => {
     playSound('click');
+    requirePlayerName(function () {
 
     const home = document.getElementById('homeScreen');
     home.style.opacity = '';
@@ -349,10 +421,13 @@ document.getElementById('homeBtnMiniGames').addEventListener('click', () => {
 
         openMiniGames();
     }, 550);
+
+    });
 });
 
 document.getElementById('homeBtnBattle').addEventListener('click', () => {
     playSound('click');
+    requirePlayerName(function () {
 
     const home = document.getElementById('homeScreen');
     home.style.opacity = '';
@@ -376,6 +451,8 @@ document.getElementById('homeBtnBattle').addEventListener('click', () => {
 
         openBattlePanel();
     }, 550);
+
+    });
 });
 
     document.getElementById('reloadBtn').addEventListener('click', reloadCurrentMap);
@@ -526,7 +603,7 @@ document.getElementById('provinceSelect').addEventListener('change', function ()
     newRound();
 });
     updateToggleBtnText();
-    document.querySelectorAll('#panel button, #dailyPanel button, #quizPanel button, #battlePanel button, #miniGamesPanel button').forEach(btn => {
+    document.querySelectorAll('#panel button, #dailyPanel button, #quizPanel button, #battlePanel button, #miniGamesPanel button, #extremePanel button').forEach(btn => {
         if (btn.hasAttribute('onclick')) return;
         btn.addEventListener('click', () => playSound('click'));
     });
@@ -1842,8 +1919,62 @@ function showAnswer() {
 }
 
 // ==================== 头像系统（区域版图） ====================
+// ==================== 玩家名字 ====================
+var playerName = '';
+var playerNameChangedDate = '';
+var playerNameFirstTime = true;
+
+function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
+
+function getPlayerName() {
+    return playerName || localStorage.getItem('playerName') || '';
+}
+
+function savePlayerName(name, isFirst) {
+    playerName = name;
+    localStorage.setItem('playerName', name);
+    if (!isFirst) {
+        playerNameChangedDate = todayStr();
+        localStorage.setItem('playerNameChangedDate', playerNameChangedDate);
+    } else {
+        localStorage.setItem('playerNameFirstTime', '0');
+        playerNameFirstTime = false;
+    }
+}
+
+function canChangeNameToday() {
+    var last = localStorage.getItem('playerNameChangedDate') || '';
+    return last !== todayStr();
+}
+
+function hasPlayerName() {
+    return !!getPlayerName();
+}
+
+function validatePlayerName(name) {
+    name = (name || '').trim();
+    if (name.length < 2) return '名字至少 2 个字';
+    if (name.length > 12) return '名字最多 12 个字';
+    if (!/^[\u4e00-\u9fa5A-Za-z0-9]+$/.test(name)) return '只能包含中文、字母、数字';
+    return '';
+}
+
+function initPlayerName() {
+    playerName = localStorage.getItem('playerName') || '';
+    playerNameChangedDate = localStorage.getItem('playerNameChangedDate') || '';
+    playerNameFirstTime = localStorage.getItem('playerNameFirstTime') !== '0';
+}
+
 var currentAvatarImage = localStorage.getItem('avatarImage') || '';   // dataURL
 var pendingAvatarImage = '';   // 预览中的
+
+function updateHomePlayerName() {
+    var el = document.getElementById('homePlayerName');
+    if (el) el.textContent = getPlayerName() || '未命名';
+}
 
 function avatarImgHtml(dataUrl) {
     if (!dataUrl) return '👤';
@@ -1860,10 +1991,64 @@ function applyAvatar() {
     }
 }
 
+function requirePlayerName(callback) {
+    if (hasPlayerName()) {
+        callback();
+        return;
+    }
+    showNamePopup(callback);
+}
+
+function showNamePopup(onDone) {
+    var popup = document.getElementById('namePopup');
+    var input = document.getElementById('namePopupInput');
+    var msg = document.getElementById('namePopupMsg');
+    input.value = '';
+    msg.textContent = '';
+    popup.style.display = 'block';
+    setTimeout(function () { input.focus(); }, 100);
+
+    function doSave() {
+        var name = input.value.trim();
+        var err = validatePlayerName(name);
+        if (err) { msg.textContent = err; return; }
+        savePlayerName(name, true);
+        updateHomePlayerName();
+        popup.style.display = 'none';
+        if (typeof onDone === 'function') onDone();
+    }
+
+    document.getElementById('namePopupSaveBtn').onclick = doSave;
+    input.onkeydown = function (e) {
+        if (e.key === 'Enter') doSave();
+    };
+}
+
+function updateHomePlayerName() {
+    var el = document.getElementById('homePlayerName');
+    if (el) el.textContent = getPlayerName() || '未命名';
+}
+
 function openAvatarPopup() {
     pendingAvatarImage = '';
     document.getElementById('avatarSearchInput').value = '';
     document.getElementById('avatarSearchMsg').textContent = '';
+
+    // 名字回填 + 房间内禁用
+    var ni = document.getElementById('avatarNameInput');
+    var nb = document.getElementById('avatarNameSaveBtn');
+    var nm = document.getElementById('avatarNameMsg');
+    if (ni) ni.value = getPlayerName() || '';
+    if (nm) { nm.textContent = ''; nm.style.color = '#ef4444'; }
+
+    var inRoom = (typeof battleRoomId !== 'undefined' && battleRoomId);
+    if (ni) ni.disabled = inRoom;
+    if (nb) nb.disabled = inRoom;
+    if (inRoom && nm) {
+        nm.style.color = '#999';
+        nm.textContent = '对战房间内不能改名';
+    }
+
     // 预览当前头像
     var preview = document.getElementById('avatarPreview');
     if (currentAvatarImage) {
@@ -2741,6 +2926,12 @@ function setGovSeatHint(text) {
 
 function getGovSeatBest() {
     return Number(localStorage.getItem('govSeatBest') || '0');
+}
+
+function saveGovSeatBest(score) {
+    if (score > getGovSeatBest()) {
+        localStorage.setItem('govSeatBest', String(score));
+    }
 }
 
 // ==================== 找政府驻地：判定 ====================
@@ -3986,6 +4177,302 @@ let skipDailyLock = false;
 
 let lastSkipTime = 0;
 
+// ==================== 极限挑战 ====================
+
+let extremeMode = false;
+let extremeScore = 0;
+let extremeTimer = null;
+let extremeEndTime = 0;
+let extremeLocked = false;
+let extremeLoadSeq = 0;
+
+function getExtremeHistory() {
+    try {
+        return JSON.parse(localStorage.getItem('extremeHistory') || '[]');
+    } catch (e) { return []; }
+}
+
+function saveExtremeHistory(name, score) {
+    if (!name || score <= 0) return;
+    var arr = getExtremeHistory();
+    var idx = -1;
+    for (var i = 0; i < arr.length; i++) {
+        if (arr[i].name === name) { idx = i; break; }
+    }
+    var now = new Date().toLocaleString();
+    if (idx >= 0) {
+        if (score > arr[idx].score) {
+            arr[idx].score = score;
+            arr[idx].time = now;
+        }
+    } else {
+        arr.push({ name: name, score: score, time: now });
+    }
+    arr.sort(function (a, b) { return b.score - a.score; });
+    if (arr.length > 10) arr = arr.slice(0, 10);
+    localStorage.setItem('extremeHistory', JSON.stringify(arr));
+}
+
+function openExtremeChallenge() {
+    playSound('click');
+    if (typeof quizCleanup === 'function') quizCleanup();
+    dailyMode = false;
+    dailyCompleted = false;
+
+    document.getElementById('dailyModePopup').style.display = 'none';
+    document.getElementById('homeScreen').style.display = 'none';
+    document.getElementById('panel').style.display = 'none';
+    document.getElementById('dailyPanel').style.display = 'none';
+
+    var ep = document.getElementById('extremePanel');
+    ep.style.display = 'block';
+    ep.style.opacity = '0';
+    ep.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    ep.style.transform = 'translateY(-8px)';
+    void ep.offsetWidth;
+    ep.style.opacity = '1';
+    ep.style.transform = 'translateY(0)';
+
+    document.getElementById('map').classList.add('visible');
+    var rb = document.getElementById('reloadBtn');
+    if (rb) { rb.style.visibility = 'hidden'; rb.style.opacity = '0'; }
+
+    // 显示"我准备好了"，不自动开始
+    extremeMode = false;
+    extremeLocked = true;
+    window._extremeStarted = false;   // 是否已开始过
+    document.getElementById('extremeReadyBtn').style.display = 'block';
+    document.getElementById('extremeTimer').textContent = '5.0';
+    document.getElementById('extremeTimer').style.color = '#f59e0b';
+    document.getElementById('extremeScore').textContent = '答对: 0 题';
+    document.getElementById('extremeMsg').textContent = '';
+    document.getElementById('extremeInput').value = '';
+    document.getElementById('extremeInput').disabled = true;
+    document.getElementById('extremeSubmitBtn').disabled = true;
+    document.getElementById('extremeInput').style.display = 'none';
+    document.getElementById('extremeSubmitBtn').style.display = 'none';
+    document.getElementById('extremeHistoryBtn').style.display = 'block';
+}
+
+function startExtremeChallenge() {
+    extremeMode = true;
+    extremeScore = 0;
+    extremeLocked = false;
+    window._extremeStarted = true;
+    document.getElementById('extremeReadyBtn').style.display = 'none';
+    document.getElementById('extremeInput').style.display = 'block';
+    document.getElementById('extremeSubmitBtn').style.display = 'block';
+    document.getElementById('extremeHistoryBtn').style.display = 'block';
+    document.getElementById('extremeScore').textContent = '答对: 0 题';
+    document.getElementById('extremeMsg').textContent = '';
+    document.getElementById('extremeInput').value = '';
+    extremeLoadSeq++;
+
+    loadExtremeQuestion();
+}
+
+function loadExtremeQuestion() {
+    if (!extremeMode) return;
+    extremeLocked = true;
+    document.getElementById('extremeInput').disabled = true;
+    document.getElementById('extremeSubmitBtn').disabled = true;
+    document.getElementById('extremeMsg').textContent = '加载中...';
+    document.getElementById('extremeMsg').style.color = '#999';
+
+    var mySeq = ++extremeLoadSeq;
+
+    var pool = districtPool.slice();
+    var poolFiltered = pool.filter(function (d) { return !recentDistricts.includes(d); });
+    var pick = (poolFiltered.length > 0 ? poolFiltered : pool)[
+        Math.floor(Math.random() * (poolFiltered.length > 0 ? poolFiltered : pool).length)
+    ];
+    recentDistricts.push(pick);
+    if (recentDistricts.length > 20) recentDistricts.shift();
+
+    targetDistrict = null;
+
+    var handler = function (district) {
+        // 消费掉拦截器，防止 showDistrict 递归
+        window._extremeIntercept = null;
+
+        if (mySeq !== extremeLoadSeq) return;
+        if (!district || !district.boundaries || district.boundaries.length === 0) {
+            setTimeout(loadExtremeQuestion, 200);
+            return;
+        }
+        targetDistrict = district;
+        if (district.adcode) districtCache[district.adcode] = district;
+
+        // 现在 _extremeIntercept 已经是 null，showDistrict 走正常画图逻辑
+        showDistrict(district);
+
+        document.getElementById('extremeInput').value = '';
+        document.getElementById('extremeInput').disabled = false;
+        document.getElementById('extremeSubmitBtn').disabled = false;
+        document.getElementById('extremeInput').focus();
+        document.getElementById('extremeMsg').textContent = '';
+
+        extremeLocked = false;
+        extremeEndTime = Date.now() + 5000;
+        if (extremeTimer) clearInterval(extremeTimer);
+        extremeTimer = setInterval(updateExtremeTimer, 50);
+    };
+
+    window._extremeIntercept = handler;
+
+    loadDistrict(pick, true);
+}
+
+function updateExtremeTimer() {
+    if (!extremeMode) return;
+    var left = (extremeEndTime - Date.now()) / 1000;
+    if (left < 0) left = 0;
+    document.getElementById('extremeTimer').textContent = left.toFixed(1);
+    document.getElementById('extremeTimer').style.color = left <= 2 ? '#ef4444' : '#f59e0b';
+
+    if (left <= 0) {
+        clearInterval(extremeTimer);
+        extremeTimer = null;
+        extremeGameOver();
+    }
+}
+
+function extremeGameOver() {
+    if (!extremeMode) return;
+    extremeMode = false;
+    extremeLocked = true;
+    playSound('timeup');
+    document.getElementById('extremeInput').disabled = true;
+    document.getElementById('extremeSubmitBtn').disabled = true;
+    document.getElementById('extremeTimer').textContent = '0.0';
+
+    var name = getPlayerName() || '未命名';
+    saveExtremeHistory(name, extremeScore);
+
+    var answerText = targetDistrict ? targetDistrict.name : '未知';
+    document.getElementById('extremeMsg').innerHTML =
+        '⏰ 时间到！答对 ' + extremeScore + ' 题<br>' +
+        '<span style="color:#4a6cf7;font-size:14px;">正确答案：' + answerText + '</span>';
+    document.getElementById('extremeMsg').style.color = '#ef4444';
+
+    setTimeout(showExtremeHistory, 1500);
+}
+
+function checkExtremeAnswer() {
+    if (!extremeMode || extremeLocked || !targetDistrict) return;
+
+    var input = document.getElementById('extremeInput').value.trim();
+    if (!input) return;
+
+    var match = matchForMode(input, 'hard');
+    var correct = false;
+
+    if (match.status === 'exact' || match.status === 'partial') {
+        var matchBase = match.name.replace(/（.+?）$/, '');
+        var targetBase = targetDistrict.name.replace(/（.+?）$/, '');
+        correct = match.name === targetDistrict.name || matchBase === targetBase;
+    } else if (match.status === 'none') {
+        var baseInput = input.replace(/（.+?）$/, '');
+        var possible = Object.keys(ADJACENCY).filter(function (name) {
+            var aliases = aliasMap[name] || [name];
+            return aliases.includes(baseInput) ||
+                   aliases.includes(baseInput + '区') ||
+                   aliases.includes(baseInput + '县') ||
+                   aliases.includes(baseInput + '市');
+        });
+        if (possible.length > 1) {
+            document.getElementById('extremeMsg').textContent = '⚠️ 请输入更完整名称';
+            document.getElementById('extremeMsg').style.color = '#f59e0b';
+            return;
+        }
+    }
+
+    if (correct) {
+        playSound('correct');
+        extremeScore++;
+        document.getElementById('extremeScore').textContent = '答对: ' + extremeScore + ' 题';
+        document.getElementById('extremeMsg').textContent = '✅ 正确！';
+        document.getElementById('extremeMsg').style.color = '#10b981';
+
+        if (extremeTimer) { clearInterval(extremeTimer); extremeTimer = null; }
+        extremeLocked = true;
+        document.getElementById('extremeInput').disabled = true;
+        document.getElementById('extremeSubmitBtn').disabled = true;
+
+        setTimeout(loadExtremeQuestion, 300);
+    } else {
+        playSound('wrong');
+        document.getElementById('extremeMsg').textContent = '❌ 不对，再猜！';
+        document.getElementById('extremeMsg').style.color = '#ef4444';
+        document.getElementById('extremeInput').value = '';
+        document.getElementById('extremeInput').focus();
+    }
+}
+
+function exitExtremeChallenge() {
+    if (extremeTimer) { clearInterval(extremeTimer); extremeTimer = null; }
+    extremeMode = false;
+    extremeLocked = true;
+    extremeLoadSeq++;
+    window._extremeIntercept = null;
+
+    document.getElementById('extremePanel').style.display = 'none';
+    document.getElementById('map').classList.remove('visible');
+    if (typeof clearMap === 'function') clearMap();
+
+    document.getElementById('homeScreen').style.display = 'flex';
+    showHomeScreenWithFade();
+}
+
+function showExtremeHistory() {
+    var arr = getExtremeHistory();
+    var overlay = document.createElement('div');
+    overlay.id = 'extremeHistoryOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:9999999;opacity:0;transition:opacity 0.25s ease;';
+    document.body.appendChild(overlay);
+
+    var panel = document.createElement('div');
+    panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.85);background:white;padding:25px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:10000000;min-width:300px;max-height:70vh;overflow-y:auto;opacity:0;transition:opacity 0.25s ease, transform 0.25s ease;';
+
+    var html = '<h3 style="text-align:center;margin-bottom:15px;">🏆 极限挑战排行</h3>';
+    if (arr.length === 0) {
+        html += '<div style="text-align:center;color:#999;padding:20px;">暂无记录</div>';
+    } else {
+        arr.forEach(function (r, i) {
+            var medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : (i + 1) + '.'));
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">' +
+                '<span>' + medal + ' <b style="color:#4a6cf7;">' + r.name + '</b></span>' +
+                '<span><b>' + r.score + '</b> 题 <span style="font-size:11px;color:#999;">' + r.time + '</span></span>' +
+                '</div>';
+        });
+    }
+    html += '<button id="extremeHistoryCloseBtn" style="display:block;width:100%;margin-top:15px;padding:10px;border:none;border-radius:8px;background:#4a6cf7;color:white;cursor:pointer;">关闭</button>';
+
+    panel.innerHTML = html;
+    document.body.appendChild(panel);
+
+    requestAnimationFrame(function () {
+        overlay.style.opacity = '1';
+        panel.style.opacity = '1';
+        panel.style.transform = 'translate(-50%,-50%) scale(1)';
+    });
+
+    document.getElementById('extremeHistoryCloseBtn').onclick = function () {
+        playSound('click');
+        overlay.style.opacity = '0';
+        panel.style.opacity = '0';
+        panel.style.transform = 'translate(-50%,-50%) scale(0.85)';
+        setTimeout(function () {
+            panel.remove();
+            overlay.remove();
+            // 已开始且已结束（挑战结束）→ 退出；否则停在面板
+            if (window._extremeStarted && !extremeMode) {
+                exitExtremeChallenge();
+            }
+        }, 250);
+    };
+}
+
 function skipDailyQuestion() {
     if (!dailyMode || dailyCompleted) return;
     
@@ -4219,6 +4706,8 @@ function pickBattleQuestion(used) {
 function openBattlePanel() {
     playSound('click');
     if (typeof quizCleanup === 'function') quizCleanup();
+    var nd = document.getElementById('battleMyNameDisplay');
+    if (nd) nd.textContent = getPlayerName() || '未命名';
     dailyMode = false;
     findDifferentMode = false;
     if (timerMode) {
@@ -4343,8 +4832,8 @@ function createBattleRoom() {
     }
     cleanupBattle();
 
-    var name = document.getElementById('battlePlayerName').value.trim();
-    if (!name) { alert('请输入昵称'); return; }
+    var name = getPlayerName();
+    if (!name) { alert('请先取个名字'); return; }
 
     battlePlayerName = name;
     battlePlayerNumber = 1;
@@ -4483,9 +4972,9 @@ function joinBattleRoom() {
     }
     cleanupBattle();
 
-    var name = document.getElementById('battlePlayerName').value.trim();
+    var name = getPlayerName();
     var roomId = document.getElementById('battleRoomInput').value.trim().toUpperCase();
-    if (!name) { alert('请输入昵称'); return; }
+    if (!name) { alert('请先取个名字'); return; }
     if (!roomId) { alert('请输入房间号'); return; }
     if (roomId.length !== 6) { alert('房间号应为 6 位'); return; }
 

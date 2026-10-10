@@ -1001,6 +1001,12 @@ function showDistrict(district) {
         cb2(district);
         return;
     }
+
+    // 极限挑战：把结果交给 _extremeIntercept（不清 null，极限挑战连续出题）
+    if (typeof window._extremeIntercept === 'function') {
+        window._extremeIntercept(district);
+        return;
+    }
     
     if (!district || !district.boundaries || district.boundaries.length === 0) {
         setMsg('加载失败，换一个', 'wrong');
