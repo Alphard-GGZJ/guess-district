@@ -16,7 +16,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 30px;
+    gap: 18px;
 }
 
 #homeScreen {
@@ -56,7 +56,7 @@
 #homeMenu {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 10px;
     width: 300px;
 }
 
