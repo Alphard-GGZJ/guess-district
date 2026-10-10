@@ -12,11 +12,12 @@
 
 <div id="homeScreen">
     <h1>🗺️ 看图猜区县</h1>
-    <div id="homeAvatarDisplay" style="width:80px;height:80px;border-radius:50%;overflow:hidden;margin-bottom:10px;cursor:pointer;border:3px solid #4a6cf7;background:#dfe9f5;display:flex;align-items:center;justify-content:center;" title="点击更换头像">
-        <span style="color:#999;font-size:13px;">点头像</span>
+    <div id="homeAvatarDisplay" style="width:80px;height:80px;flex-shrink:0;border-radius:50%;overflow:hidden;margin-bottom:2px;cursor:pointer;border:3px solid #4a6cf7;background:#dfe9f5;display:flex;align-items:center;justify-content:center;" title="点击更换头像">
+                        <span style="color:#999;font-size:13px;">点头像</span>
     </div>
-    <div id="homeMenu">
-        <button id="homeBtnAvatar" style="background:linear-gradient(135deg,#06b6d4,#22d3ee);color:white;">🙂 我的头像</button>
+    <div id="homePlayerName" style="text-align:center;font-size:14px;color:#4a6cf7;font-weight:bold;margin-bottom:8px;min-height:20px;flex-shrink:0;"></div>
+        <div id="homeMenu">
+        <button id="homeBtnAvatar" style="background:linear-gradient(135deg,#06b6d4,#22d3ee);color:white;">🙂 个人信息</button>
         <button id="homeBtnPlay">🎮 看图猜区县</button>
         <button id="homeBtnQuiz">📝 出题模式</button>
         <button id="homeBtnDaily">📅 每日挑战</button>
@@ -114,6 +115,18 @@
     </div>
 </div>
 
+<div id="extremePanel" style="display:none;position:absolute;top:10px;left:10px;z-index:1000;background:white;padding:15px;border-radius:10px;box-shadow:0 2px 15px rgba(0,0,0,0.2);font-size:14px;min-width:240px;">
+    <h3 style="text-align:center;margin-bottom:8px;">⏱️ 极限挑战</h3>
+    <div id="extremeTimer" style="text-align:center;font-size:32px;font-weight:bold;color:#f59e0b;margin:10px 0;">5.0</div>
+    <div id="extremeScore" style="text-align:center;font-size:16px;color:#4a6cf7;margin-bottom:10px;">答对: 0 题</div>
+    <div id="extremeMsg" style="text-align:center;min-height:20px;font-weight:bold;margin-bottom:8px;"></div>
+    <button id="extremeReadyBtn" style="display:block;width:100%;margin-bottom:8px;padding:14px;border:none;border-radius:8px;background:#10b981;color:white;cursor:pointer;font-size:16px;font-weight:bold;">开始挑战</button>
+    <input type="text" id="extremeInput" placeholder="输入区县名..." autocomplete="off" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:5px;box-sizing:border-box;">
+    <button id="extremeSubmitBtn" style="display:block;width:100%;margin-top:8px;padding:10px;border:none;border-radius:8px;background:#4a6cf7;color:white;cursor:pointer;">猜！</button>
+    <button id="extremeHistoryBtn" style="display:block;width:100%;margin-top:6px;padding:8px;border:none;border-radius:8px;background:#f59e0b;color:white;cursor:pointer;font-size:13px;">🏆 排行榜</button>
+    <button id="extremeExitBtn" style="display:block;width:100%;margin-top:6px;padding:8px;border:none;border-radius:8px;background:#ccc;cursor:pointer;font-size:13px;">退出</button>
+</div>
+
 <div id="miniGamesPanel" style="display:none;">
     <h3>🎮 小游戏</h3>
     <div id="miniGamesList">
@@ -127,8 +140,8 @@
 
 <div id="battlePanel" style="display:none;">
     <h3>⚔️ 好友对决</h3>
-    <div style="text-align:center;margin-bottom:10px;">
-        <input type="text" id="battlePlayerName" placeholder="输入你的昵称" maxlength="10" style="width:80%;padding:8px;border:1px solid #ccc;border-radius:6px;margin-bottom:10px;">
+    <div style="text-align:center;margin-bottom:10px;font-size:14px;color:#4a6cf7;font-weight:bold;">
+        玩家：<span id="battleMyNameDisplay">未命名</span>
     </div>
     
     <div style="margin-bottom:10px;">
@@ -292,6 +305,7 @@
             <b style="display:block;text-align:center;margin-bottom:16px;font-size:16px;">📅 选择挑战级别</b>
     <button id="dailyModeDistrict" style="display:block;width:100%;margin:6px 0;padding:14px;background:#4a6cf7;color:white;border:none;border-radius:8px;cursor:pointer;font-size:15px;">🏘️ 县级挑战</button>
     <button id="dailyModeCity" style="display:block;width:100%;margin:6px 0;padding:14px;background:#8b5cf6;color:white;border:none;border-radius:8px;cursor:pointer;font-size:15px;">🏙️ 地级挑战</button>
+    <button id="dailyModeExtreme" style="display:block;width:100%;margin:6px 0;padding:14px;background:#ef4444;color:white;border:none;border-radius:8px;cursor:pointer;font-size:15px;">⏱️ 极限挑战</button>
     <button id="dailyModeCancel" style="display:block;width:100%;margin:10px 0 0;padding:10px;background:#ccc;color:black;border:none;border-radius:8px;cursor:pointer;font-size:14px;">主界面</button>
 </div>
 
@@ -309,8 +323,27 @@
     <button onclick="document.getElementById('helpPopup').style.display='none'" style="margin-top:10px;">知道了</button>
 </div>
 
+<div id="namePopup" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:999999999;max-width:380px;width:90vw;">
+    <b style="display:block;text-align:center;margin-bottom:16px;font-size:16px;">给自己取个名字</b>
+    <input type="text" id="namePopupInput" placeholder="2~12 字，中文/字母/数字" maxlength="12" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:14px;box-sizing:border-box;">
+    <div id="namePopupMsg" style="text-align:center;font-size:12px;color:#ef4444;margin-top:8px;min-height:16px;"></div>
+    <button id="namePopupSaveBtn" style="display:block;width:100%;margin-top:12px;padding:10px;border:none;border-radius:8px;background:#4a6cf7;color:white;cursor:pointer;font-size:14px;">确定</button>
+</div>
+
 <div id="avatarPopup" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:99999999;max-width:420px;width:92vw;">
-    <b style="display:block;text-align:center;margin-bottom:16px;font-size:16px;">选择头像版图</b>
+    <b style="display:block;text-align:center;margin-bottom:12px;font-size:16px;">个人信息</b>
+
+    <div style="margin-bottom:16px;">
+        <label style="font-size:13px;color:#666;">名字：</label>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+            <input type="text" id="avatarNameInput" placeholder="2~12 字" maxlength="12" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:14px;">
+            <button id="avatarNameSaveBtn" style="padding:8px 14px;border:none;border-radius:6px;background:#4a6cf7;color:white;cursor:pointer;font-size:13px;">保存</button>
+        </div>
+        <div id="avatarNameMsg" style="font-size:12px;color:#ef4444;margin-top:4px;min-height:16px;"></div>
+    </div>
+
+    <div style="border-top:1px solid #eee;margin-bottom:16px;"></div>
+
     <div id="avatarPreview" style="width:120px;height:120px;margin:0 auto 16px;border:2px solid #eee;border-radius:50%;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#dfe9f5;">
         <span style="color:#999;font-size:13px;">暂无</span>
     </div>
@@ -373,6 +406,8 @@
     window.onload = function () {
         // 先绑定 UI
         bindUI();
+        initPlayerName();
+        updateHomePlayerName();
         initSpeedSetting();
         updateBestScoreDisplay();
         applyAvatar();
